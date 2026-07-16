@@ -1,0 +1,21 @@
+<header class="bg-white border-bottom py-3 px-3 px-md-4" th:fragment="header(title)" xmlns:th="http://www.thymeleaf.org">
+    <div class="d-flex align-items-center justify-content-between">
+        <div class="d-flex align-items-center gap-2">
+            <button class="btn btn-outline-secondary d-inline-flex align-items-center" type="button"
+                    id="sidebarToggle" aria-label="折叠侧边栏">
+                <i class="bi bi-layout-sidebar-inset" id="sidebarToggleIcon" aria-hidden="true"></i>
+            </button>
+            <h1 class="h4 mb-0" th:text="${title}">控制台总览</h1>
+        </div>
+        <div class="d-flex align-items-center gap-3">
+            <div class="text-end">
+                <p class="mb-0 fw-semibold lh-sm" th:text="${session.name != null ? session.name : '未登录'}">未知用户</p>
+                <small class="text-muted" th:text="${session.role}">角色</small>
+            </div>
+            <a th:href="@{/logout}" class="btn btn-sm btn-outline-danger" aria-label="退出登录">
+                <i class="bi bi-box-arrow-right" aria-hidden="true"></i>
+                <span class="ms-1">退出</span>
+            </a>
+        </div>
+    </div>
+</header>

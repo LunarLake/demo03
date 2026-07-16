@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+    <th:block th:replace="~{fragments/common-head :: head('会议室列表')}"></th:block>
+</head>
+<body class="d-flex">
+<th:block th:replace="~{fragments/sidebar :: sidebar}"></th:block>
+<main class="content-area flex-grow-1">
+    <th:block th:replace="~{fragments/header :: header('会议室列表')}"></th:block>
+    <section class="container-fluid py-4 px-3 px-md-4">
+        <div th:if="${info != null}" class="alert alert-success alert-dismissible fade show" role="alert">
+            <span th:text="${info}"></span>
+            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+        </div>
+
+        <div class="d-flex justify-content-between align-items-center mb-3">
+            <form class="d-flex gap-2" th:action="@{/rooms}" method="get">
+                <input type="text" class="form-control" name="keyword" placeholder="搜索会议室名称或设备..." th:value="${param.keyword}">
+                <button type="submit" class="btn btn-primary flex-shrink-0">搜索</button>
+            </form>
+            <button th:if="${session.role == 'TEACHER'}" class="btn btn-success" data-bs-toggle="modal" data-bs-target="#addRoomModal">
+                <i class="bi bi-plus-lg"></i> 新增会议室
+            </button>
+        </div>
+
+        <div class="row g-3">
+            <div class="col-md-6 col-lg-4" th:each="room : ${rooms}">
+                <div class="card summary-card h-100">
+                    <div class="card-body">
+                        <div class="d-flex justify-content-between align-items-start">
+                            <h5 class="card-title" th:text="${room.roomName}">会议室名称</h5>
+                            <span class="badge" th:classappend="${room.roomStatus == 0} ? 'bg-success' : 'bg-warning'"
+                                  th:text="${room.roomStatus == 0} ? '正常' : '维护中'"></span>
+                        </div>
+                        <p class="card-text text-muted mt-2">
+                            <i class="bi bi-people"></i> 容纳 <span th:text="${room.capacity}"></span> 人
+                        </p>
+                        <p class="card-text" th:if="${room.equipment != null}">
+                            <i class="bi bi-tools"></i> <span th:text="${room.equipment}"></span>
+                        </p>
+                        <div class="d-flex gap-2 mt-3">
+                            <a th:if="${room.roomStatus == 0}" class="btn btn-sm btn-primary" th:href="@{/reservation/new(roomId=${room.id})}">
+                                预约
+                            </a>
+                            <button th:if="${room.roomStatus == 1}" class="btn btn-sm btn-secondary" disabled>维护中</button>
+                            <th:block th:if="${session.role == 'TEACHER'}">
+                                <button class="btn btn-sm btn-outline-secondary" data-bs-toggle="modal" data-bs-target="#editRoomModal"
+                                        th:attr="data-room-id=${room.id},data-room-name=${room.roomName},data-capacity=${room.capacity},data-equipment=${room.equipment},data-room-status=${room.roomStatus}">
+                                    编辑
+                                </button>
+                                <form th:action="@{/room/delete/{id}(id=${room.id})}" method="post" style="display:inline">
+                                    <button type="submit" class="btn btn-sm btn-outline-danger" onclick="return confirm('确定要删除该会议室吗？')">删除</button>
+                                </form>
+                            </th:block>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div th:if="${#lists.isEmpty(rooms)}" class="col-12 text-center py-5">
+                <p class="text-muted">暂无会议室数据</p>
+            </div>
+        </div>
+    </section>
+</main>
+<th:block th:replace="~{fragments/common-scripts :: scripts}"></th:block>
+
+<!-- 新增会议室 Modal -->
+<div class="modal fade" id="addRoomModal" tabindex="-1" th:if="${session.role == 'TEACHER'}">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <form th:action="@{/room/add}" method="post">
+                <div class="modal-header"><h5 class="modal-title">新增会议室</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+                <div class="modal-body">
+                    <div class="mb-3"><label class="form-label">名称</label><input type="text" class="form-control" name="roomName" required></div>
+                    <div class="mb-3"><label class="form-label">容纳人数</label><input type="number" class="form-control" name="capacity" required></div>
+                    <div class="mb-3"><label class="form-label">设备设施</label><input type="text" class="form-control" name="equipment"></div>
+                    <div class="mb-3"><label class="form-label">状态</label>
+                        <select class="form-select" name="roomStatus"><option value="0">正常</option><option value="1">维护中</option></select>
+                    </div>
+                </div>
+                <div class="modal-footer"><button type="submit" class="btn btn-primary">保存</button></div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- 编辑会议室 Modal -->
+<div class="modal fade" id="editRoomModal" tabindex="-1" th:if="${session.role == 'TEACHER'}">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <form th:action="@{/room/update}" method="post">
+                <input type="hidden" name="id" id="editRoomId">
+                <div class="modal-header"><h5 class="modal-title">编辑会议室</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+                <div class="modal-body">
+                    <div class="mb-3"><label class="form-label">名称</label><input type="text" class="form-control" name="roomName" id="editRoomName" required></div>
+                    <div class="mb-3"><label class="form-label">容纳人数</label><input type="number" class="form-control" name="capacity" id="editCapacity" required></div>
+                    <div class="mb-3"><label class="form-label">设备设施</label><input type="text" class="form-control" name="equipment" id="editEquipment"></div>
+                    <div class="mb-3"><label class="form-label">状态</label>
+                        <select class="form-select" name="roomStatus" id="editStatus"><option value="0">正常</option><option value="1">维护中</option></select>
+                    </div>
+                </div>
+                <div class="modal-footer"><button type="submit" class="btn btn-primary">保存修改</button></div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- 预约申请 Modal -->
+<div class="modal fade" id="applyModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <form th:action="@{/reservation/apply}" method="post">
+                <div class="modal-header"><h5 class="modal-title">预约会议室：<span id="applyRoomName"></span></h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+                <div class="modal-body">
+                    <input type="hidden" name="roomId" id="applyRoomId">
+                    <div class="mb-3"><label class="form-label">开始时间</label>
+                        <input type="datetime-local" class="form-control" name="startTime" required></div>
+                    <div class="mb-3"><label class="form-label">结束时间</label>
+                        <input type="datetime-local" class="form-control" name="endTime" required></div>
+                    <div class="mb-3"><label class="form-label">参会人数</label>
+                        <input type="number" class="form-control" name="attendeeCount" value="1" min="1" required></div>
+                </div>
+                <div class="modal-footer"><button type="submit" class="btn btn-primary">提交预约</button></div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<script>
+    document.getElementById('applyModal').addEventListener('show.bs.modal', function (event) {
+        const button = event.relatedTarget;
+        document.getElementById('applyRoomId').value = button.getAttribute('data-room-id');
+        document.getElementById('applyRoomName').textContent = button.getAttribute('data-room-name');
+    });
+    document.getElementById('editRoomModal').addEventListener('show.bs.modal', function (event) {
+        const button = event.relatedTarget;
+        document.getElementById('editRoomId').value = button.getAttribute('data-room-id');
+        document.getElementById('editRoomName').value = button.getAttribute('data-room-name');
+        document.getElementById('editCapacity').value = button.getAttribute('data-capacity');
+        document.getElementById('editEquipment').value = button.getAttribute('data-equipment') || '';
+        document.getElementById('editStatus').value = button.getAttribute('data-room-status');
+    });
+</script>
+</body>
+</html>

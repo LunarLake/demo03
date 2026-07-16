@@ -1,0 +1,34 @@
+<th:block th:fragment="scripts" xmlns:th="http://www.thymeleaf.org">
+    <script src="https://cdn.jsdelivr.net.cn/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"
+            integrity="sha384-YvpcrYf0tY3lHB60NNkmXc5s9fDVZLESaAA55NDzOxhy9GkcIdslK1eN7N6jIeHz"
+            crossorigin="anonymous"></script>
+    <script>
+        const COLLAPSED = 'sidebar-collapsed';
+        const toggleBtn = document.getElementById('sidebarToggle');
+        const toggleIcon = document.getElementById('sidebarToggleIcon');
+        const menuLinks = document.querySelectorAll('.sidebar-menu .nav-link');
+
+        const syncIcon = () => {
+            toggleIcon.className = document.body.classList.contains(COLLAPSED)
+                ? 'bi bi-layout-sidebar'
+                : 'bi bi-layout-sidebar-inset';
+        };
+
+        if (localStorage.getItem(COLLAPSED) === '1') document.body.classList.add(COLLAPSED);
+        syncIcon();
+
+        toggleBtn.addEventListener('click', () => {
+            const collapsed = document.body.classList.toggle(COLLAPSED);
+            localStorage.setItem(COLLAPSED, +collapsed);
+            syncIcon();
+        });
+
+        const currentFile = location.pathname.split('/').pop() || 'index.html';
+        menuLinks.forEach(link => {
+            const linkFile = link.getAttribute('href').split('/').pop();
+            const isActive = linkFile === currentFile || (currentFile === '' && linkFile === 'index.html');
+            link.classList.toggle('active', isActive);
+            isActive ? link.setAttribute('aria-current', 'page') : link.removeAttribute('aria-current');
+        });
+    </script>
+</th:block>

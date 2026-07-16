@@ -1,0 +1,10 @@
+# 本地开发数据库配置模板
+# 使用方式：复制为本目录下的 application-local.yml 并填写真实密码
+#   copy application-local.yml.example application-local.yml   (Windows)
+#   cp application-local.yml.example application-local.yml     (Linux/macOS)
+# application-local.yml 已在 .gitignore 中，不会被提交
+
+spring:
+  datasource:
+    username: root
+    password: your_password_here

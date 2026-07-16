@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <th:block th:replace="~{fragments/common-head :: head('用户登录')}"></th:block>
+    <style>
+        * { box-sizing: border-box; }
+        body {
+            margin: 0; min-height: 100vh; color: #0f172a;
+            font-family: "Outfit", "Noto Sans SC", "PingFang SC", "Microsoft YaHei", sans-serif;
+            background: radial-gradient(1200px 420px at -10% -10%, #bfdbfe66 0%, transparent 60%),
+                        radial-gradient(900px 360px at 110% 120%, #67e8f966 0%, transparent 60%),
+                        linear-gradient(135deg, #eff6ff 0%, #e0f2fe 100%);
+        }
+        .login-shell { min-height: 100vh; display: grid; grid-template-columns: 1.1fr 1fr; gap: 2rem; padding: 2.25rem; }
+        .brand-panel { padding: 2.25rem; display: flex; flex-direction: column; justify-content: center; }
+        .brand-logo { width: 52px; height: 52px; border-radius: 14px; background: linear-gradient(135deg, #0ea5e9, #0284c7);
+            display: inline-flex; align-items: center; justify-content: center; font-size: 1.4rem; margin-bottom: 1rem; }
+        .brand-title { font-size: clamp(1.9rem, 2.8vw, 2.8rem); line-height: 1.1; margin: 0; letter-spacing: 0.01em; }
+        .brand-subtitle { margin-top: 0.9rem; margin-bottom: 0; color: #64748b; }
+        .form-panel { display: flex; align-items: center; justify-content: center; }
+        .login-card {
+            width: min(100%, 460px); background: #ffffff; border: 1px solid #dbe7f3;
+            border-radius: 24px; padding: 2rem; box-shadow: 0 20px 40px rgba(15, 23, 42, 0.12);
+        }
+        .login-title { font-size: 1.65rem; margin-bottom: 0.25rem; }
+        .login-desc { color: #475569; margin-bottom: 1.5rem; }
+        .form-label { font-weight: 600; font-size: 0.92rem; margin-bottom: 0.35rem; }
+        .form-control, .input-group-text { border-color: #cbd5e1; min-height: 46px; }
+        .form-control:focus { border-color: #0284c7; box-shadow: 0 0 0 0.18rem rgba(2, 132, 199, 0.18); }
+        .captcha-row { display: grid; grid-template-columns: minmax(0, 1fr) 120px; gap: 0.85rem; align-items: start; }
+        .captcha-box { height: 46px; border: 1px solid #cbd5e1; border-radius: 12px; background: linear-gradient(135deg, #f8fbff 0%, #e0f2fe 100%);
+            display: flex; align-items: center; justify-content: center; cursor: pointer; overflow: hidden; }
+        .captcha-box:hover { border-color: #0284c7; }
+        .captcha-tip { margin-top: 0.35rem; color: #64748b; font-size: 0.8rem; }
+        .login-btn { min-height: 46px; font-weight: 600; border: 0; background: linear-gradient(135deg, #0ea5e9 0%, #0369a1 100%); }
+        .login-btn:hover { filter: brightness(0.97); }
+        .footer-note { margin-top: 1rem; color: #475569; font-size: 0.9rem; text-align: center; }
+        .footer-note a { color: #0369a1; font-weight: 600; text-decoration: none; }
+        @media (max-width: 991.98px) {
+            .login-shell { grid-template-columns: 1fr; padding: 1.2rem; }
+            .brand-panel { min-height: 200px; }
+        }
+    </style>
+</head>
+<body>
+<div class="login-shell">
+    <section class="brand-panel">
+        <div>
+            <div class="brand-logo"><i class="bi bi-building text-white"></i></div>
+            <h1 class="brand-title">会议室预约系统</h1>
+            <p class="brand-subtitle">高效管理学校会议室资源，支持在线预约、审批、签到全流程</p>
+            <ul class="brand-list">
+                <li>在线预约会议室</li>
+                <li>智能冲突检测</li>
+                <li>扫码签到确认</li>
+            </ul>
+        </div>
+    </section>
+    <section class="form-panel">
+        <div class="login-card">
+            <h2 class="login-title">欢迎回来</h2>
+            <p class="login-desc">请输入账号信息登录系统</p>
+            <p class="text-danger" th:text="${info}" th:if="${info != null}"></p>
+            <form th:action="@{/loginAction}" method="post" novalidate>
+                <div class="mb-3">
+                    <label for="username" class="form-label">账号</label>
+                    <input type="text" class="form-control" id="username" name="username" placeholder="请输入用户名" required>
+                </div>
+                <div class="mb-3">
+                    <label for="password" class="form-label">密码</label>
+                    <input type="password" class="form-control" id="password" name="password" placeholder="请输入密码" required>
+                </div>
+                <div class="mb-3">
+                    <label for="captcha" class="form-label">图片校验码</label>
+                    <div class="captcha-row">
+                        <div>
+                            <input type="text" class="form-control" id="captcha" name="captcha" placeholder="请输入校验码" autocomplete="off" required>
+                            <div class="captcha-tip">点击右侧验证码可刷新</div>
+                        </div>
+                        <div class="captcha-box" id="refreshCaptcha" style="cursor:pointer">
+                            <img src="/verityImg" width="120" height="46" onclick="this.src='/verityImg?'+Math.random()"/>
+                        </div>
+                    </div>
+                </div>
+                <button type="submit" class="btn btn-primary w-100 login-btn">登录系统</button>
+            </form>
+            <p class="footer-note">没有账号？<a th:href="@{/register}">立即注册</a></p>
+        </div>
+    </section>
+</div>
+</body>
+</html>

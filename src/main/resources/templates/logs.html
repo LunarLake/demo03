@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+    <th:block th:replace="~{fragments/common-head :: head('系统日志')}"></th:block>
+</head>
+<body class="d-flex">
+<th:block th:replace="~{fragments/sidebar :: sidebar}"></th:block>
+<main class="content-area flex-grow-1">
+    <th:block th:replace="~{fragments/header :: header('系统日志')}"></th:block>
+    <section class="container-fluid py-4 px-3 px-md-4">
+        <div class="card summary-card">
+            <div class="card-header bg-white border-0">
+                <h2 class="h5 mb-0">访问日志列表</h2>
+            </div>
+            <div class="card-body">
+                <table class="table table-hover table-sm" th:if="${!#lists.isEmpty(logList)}">
+                    <thead>
+                        <tr>
+                            <th>ID</th>
+                            <th>用户名</th>
+                            <th>访问URL</th>
+                            <th>IP地址</th>
+                            <th>时间</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr th:each="log : ${logList}">
+                            <td th:text="${log.id}"></td>
+                            <td th:text="${log.username}"></td>
+                            <td th:text="${log.url}"></td>
+                            <td th:text="${log.ip}"></td>
+                            <td th:text="${#temporals.format(log.timestamp, 'yyyy-MM-dd HH:mm:ss')}"></td>
+                        </tr>
+                    </tbody>
+                </table>
+                <p th:if="${#lists.isEmpty(logList)}" class="text-center text-muted py-4">暂无日志记录</p>
+            </div>
+        </div>
+    </section>
+</main>
+<th:block th:replace="~{fragments/common-scripts :: scripts}"></th:block>
+</body>
+</html>

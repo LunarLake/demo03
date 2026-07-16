@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+    <th:block th:replace="~{fragments/common-head :: head('我的预约')}"></th:block>
+</head>
+<body class="d-flex">
+<th:block th:replace="~{fragments/sidebar :: sidebar}"></th:block>
+<main class="content-area flex-grow-1">
+    <th:block th:replace="~{fragments/header :: header('我的预约')}"></th:block>
+    <section class="container-fluid py-4 px-3 px-md-4">
+        <div class="card summary-card">
+            <div class="card-header bg-white border-0 d-flex justify-content-between align-items-center">
+                <h2 class="h5 mb-0">预约列表</h2>
+                <a href="/rooms" class="btn btn-primary btn-sm">新增预约</a>
+            </div>
+            <div class="card-body">
+                <table class="table table-hover" th:if="${!#lists.isEmpty(reservations)}">
+                    <thead>
+                        <tr>
+                            <th>会议室</th>
+                            <th>人数</th>
+                            <th>开始时间</th>
+                            <th>结束时间</th>
+                            <th>状态</th>
+                            <th>签到码</th>
+                            <th>签到</th>
+                            <th>操作</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr th:each="r : ${reservations}">
+                            <td th:text="${r.roomName}"></td>
+                            <td th:text="${r['attendee_count'] != null ? r['attendee_count'] : '-'}"></td>
+                            <td th:text="${#strings.substring(r['start_time'].toString(), 0, 16)}"></td>
+                            <td th:text="${#strings.substring(r['end_time'].toString(), 0, 16)}"></td>
+                            <td>
+                                <span th:if="${r['reservation_status'] == 0}" class="badge bg-warning">待审批</span>
+                                <span th:if="${r['reservation_status'] == 1}" class="badge bg-success">已通过</span>
+                                <span th:if="${r['reservation_status'] == 2}" class="badge bg-danger">已拒绝</span>
+                                <span th:if="${r['reservation_status'] == 3}" class="badge bg-secondary">被覆盖取消</span>
+                                <span th:if="${r['reservation_status'] == 4}" class="badge bg-dark">已取消</span>
+                                <span th:if="${r['reservation_status'] == 5}" class="badge bg-secondary">超时释放</span>
+                            </td>
+                            <td>
+                                <span th:if="${r['check_in_code'] != null}" th:text="${r['check_in_code']}"></span>
+                                <span th:unless="${r['check_in_code'] != null}">—</span>
+                            </td>
+                            <td>
+                                <span th:if="${r['attend_status'] != null and r['attend_status'] == 1}" class="badge bg-success">已签到</span>
+                                <span th:if="${r['reservation_status'] == 1 and (r['attend_status'] == null or r['attend_status'] == 0)}"
+                                      th:with="now=${#temporals.format(#temporals.createNow(), 'yyyy-MM-dd HH:mm')}, end=${#strings.substring(r['end_time'].toString(), 0, 16)}"
+                                      class="badge" th:classappend="${now > end} ? 'bg-danger' : 'bg-secondary'"
+                                      th:text="${now > end} ? '缺席' : '未签到'"></span>
+                            </td>
+                            <td>
+                                <a th:if="${r['reservation_status'] == 1 and r['check_in_code'] != null and (r['attend_status'] == null or r['attend_status'] == 0)}"
+                                   th:href="@{/reservation/check-in/{id}(id=${r.id})}" class="btn btn-sm btn-outline-success">
+                                    签到
+                                </a>
+                                <form th:if="${(r['reservation_status'] == 0 or r['reservation_status'] == 1) and (r['attend_status'] == null or r['attend_status'] == 0)}"
+                                      th:action="@{/reservation/cancel/{id}(id=${r.id})}" method="post"
+                                      style="display:inline" onsubmit="return confirm('确定要取消该预约吗？')">
+                                    <button type="submit" class="btn btn-sm btn-outline-danger">取消</button>
+                                </form>
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+                <p th:if="${#lists.isEmpty(reservations)}" class="text-center text-muted py-4">暂无预约记录</p>
+            </div>
+        </div>
+    </section>
+</main>
+<th:block th:replace="~{fragments/common-scripts :: scripts}"></th:block>
+</body>
+</html>

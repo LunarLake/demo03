@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+    <th:block th:replace="~{fragments/common-head :: head('预约详情')}"></th:block>
+</head>
+<body class="d-flex">
+<th:block th:replace="~{fragments/sidebar :: sidebar}"></th:block>
+<main class="content-area flex-grow-1">
+    <th:block th:replace="~{fragments/header :: header('预约签到详情')}"></th:block>
+    <section class="container-fluid py-4 px-3 px-md-4">
+        <div class="row">
+            <div class="col-lg-6">
+                <div class="card summary-card mb-3">
+                    <div class="card-header bg-white border-0"><h2 class="h5 mb-0">预约信息</h2></div>
+                    <div class="card-body">
+                        <table class="table table-sm">
+                            <tr><td class="text-muted">申请人</td><td th:text="${detail.userName}"></td></tr>
+                            <tr><td class="text-muted">会议室</td><td th:text="${detail.roomName}"></td></tr>
+                            <tr><td class="text-muted">参会人数</td><td th:text="${detail['attendee_count'] != null ? detail['attendee_count'] : '-'}"></td></tr>
+                            <tr><td class="text-muted">开始时间</td><td th:text="${#strings.substring(detail['start_time'].toString(), 0, 16)}"></td></tr>
+                            <tr><td class="text-muted">结束时间</td><td th:text="${#strings.substring(detail['end_time'].toString(), 0, 16)}"></td></tr>
+                            <tr><td class="text-muted">预约状态</td><td>
+                                <span th:if="${detail['reservation_status'] == 0}" class="badge bg-warning">待审批</span>
+                                <span th:if="${detail['reservation_status'] == 1}" class="badge bg-success">已批准</span>
+                                <span th:if="${detail['reservation_status'] == 2}" class="badge bg-danger">已拒绝</span>
+                                <span th:if="${detail['reservation_status'] == 3}" class="badge bg-secondary">被覆盖取消</span>
+                                <span th:if="${detail['reservation_status'] == 4}" class="badge bg-dark">已取消</span>
+                                <span th:if="${detail['reservation_status'] == 5}" class="badge bg-secondary">超时释放</span>
+                            </td></tr>
+                            <tr th:if="${detail['check_in_code'] != null}"><td class="text-muted">签到码</td><td th:text="${detail['check_in_code']}"></td></tr>
+                        </table>
+                    </div>
+                </div>
+            </div>
+            <div class="col-lg-6">
+                <div class="card summary-card mb-3">
+                    <div class="card-header bg-white border-0"><h2 class="h5 mb-0">签到记录</h2></div>
+                    <div class="card-body">
+                        <table class="table table-sm">
+                            <tr><td class="text-muted">签到状态</td><td>
+                                <span th:if="${detail['attend_status'] != null and detail['attend_status'] == 1}" class="badge bg-success">已签到</span>
+                                <span th:if="${detail['attend_status'] == null or detail['attend_status'] == 0}" class="badge bg-secondary">未签到</span>
+                            </td></tr>
+                            <tr th:if="${detail['checkInTime'] != null}"><td class="text-muted">签到时间</td><td th:text="${#strings.substring(detail['checkInTime'].toString(), 0, 16)}"></td></tr>
+                            <tr th:if="${detail['checkInIp'] != null}"><td class="text-muted">签到IP</td><td th:text="${detail['checkInIp']}"></td></tr>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <a href="/reservation/approve-list" class="btn btn-outline-secondary">返回审批列表</a>
+    </section>
+</main>
+<th:block th:replace="~{fragments/common-scripts :: scripts}"></th:block>
+</body>
+</html>
