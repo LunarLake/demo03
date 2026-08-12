@@ -5,6 +5,7 @@ import cn.hutool.captcha.LineCaptcha;
 import com.wyc.demo03.entity.User;
 import com.wyc.demo03.entity.Reservation;
 import com.wyc.demo03.service.AttendanceRecordService;
+import com.wyc.demo03.service.LoginAttemptService;
 import com.wyc.demo03.service.MeetingRoomService;
 import com.wyc.demo03.service.ReservationService;
 import com.wyc.demo03.service.UserService;
@@ -39,6 +40,7 @@ public class MainController {
     private final MeetingRoomService meetingRoomService;
     private final AttendanceRecordService attendanceRecordService;
     private final ReservationService reservationService;
+    private final LoginAttemptService loginAttemptService;
 
     /**
      * 构造器注入（推荐方式，取代 @Autowired 字段注入）
@@ -46,11 +48,13 @@ public class MainController {
      */
     public MainController(UserService userService, MeetingRoomService meetingRoomService,
                           AttendanceRecordService attendanceRecordService,
-                          ReservationService reservationService) {
+                          ReservationService reservationService,
+                          LoginAttemptService loginAttemptService) {
         this.userService = userService;
         this.meetingRoomService = meetingRoomService;
         this.attendanceRecordService = attendanceRecordService;
         this.reservationService = reservationService;
+        this.loginAttemptService = loginAttemptService;
     }
 
     // ====================================================================
@@ -137,7 +141,16 @@ public class MainController {
             return "login";  // 回到登录页，不创建 session
         }
 
-        // ---- 第二步：用户名密码校验 ----
+        // ---- 第二步：暴力破解限流检查 ----
+        // 验证码可被 OCR/打码平台绕过，后端按 "用户名|IP" 计数兜底：
+        // 连续失败 5 次锁定 15 分钟（见 LoginAttemptService）
+        String ip = request.getRemoteAddr();
+        if (loginAttemptService.isBlocked(username, ip)) {
+            model.addAttribute("info", "登录失败次数过多，请15分钟后再试！");
+            return "login";
+        }
+
+        // ---- 第三步：用户名密码校验 ----
         // UserServiceImpl.login() 内部调用 BCrypt.checkpw() 比对密码哈希
         User user = userService.login(username, password);
 
@@ -157,9 +170,13 @@ public class MainController {
             newSession.setAttribute("role", user.getRole());          // AdminInterceptor + 侧边栏
             newSession.setAttribute("email", user.getEmail());        // 预留
 
+            // 登录成功 → 清除该 key 的失败计数
+            loginAttemptService.reset(username, ip);
+
             return "redirect:/";  // POST-Redirect-GET 模式，防止刷新页面重复提交表单
         } else {
-            // 登录失败：用户名或密码错误（具体是哪个错不透露，防止撞库）
+            // 登录失败：记录一次失败（累计 5 次触发 15 分钟锁定）
+            loginAttemptService.recordFailure(username, ip);
             model.addAttribute("info", "用户名或密码错误！");
             return "login";
         }
@@ -169,12 +186,22 @@ public class MainController {
     // POST /registerAction —— 处理注册表单提交
     // ====================================================================
     @PostMapping("/registerAction")
-    public String registerAction(@Valid User user, BindingResult bindingResult, Model model) {
+    public String registerAction(@Valid User user, BindingResult bindingResult,
+                                 String captcha, HttpSession session, Model model) {
         // ★ BindingResult 拦截逻辑：
         //   hasErrors() → 说明 @NotBlank 等注解校验未通过（用户留空了必填字段）
         if (bindingResult.hasErrors()) {
             model.addAttribute("info", "请填写完整的注册信息！");
             return "register";  // 回到注册页，保留用户已填的数据（Thymeleaf 自动回填）
+        }
+
+        // ---- 验证码校验（防止脚本批量注册垃圾账号）----
+        // 与 loginAction 相同：取出 session 验证码后立即删除，防重放
+        String code = (String) session.getAttribute("verityCode");
+        session.removeAttribute("verityCode");
+        if (code == null || !code.equalsIgnoreCase(captcha)) {
+            model.addAttribute("info", "验证码错误或已失效！");
+            return "register";
         }
 
         try {

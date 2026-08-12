@@ -102,6 +102,26 @@
         border: 0;
         background: linear-gradient(135deg, #0ea5e9 0%, #0369a1 100%);
       }
+      .captcha-row {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) 120px;
+        gap: 0.85rem;
+        align-items: start;
+      }
+      .captcha-box {
+        height: 46px;
+        border: 1px solid #cbd5e1;
+        border-radius: 12px;
+        background: linear-gradient(135deg, #f8fbff 0%, #e0f2fe 100%);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        cursor: pointer;
+        overflow: hidden;
+      }
+      .captcha-box:hover {
+        border-color: #0284c7;
+      }
       .register-btn:hover {
         filter: brightness(0.97);
       }
@@ -185,6 +205,34 @@
                 name="email"
                 placeholder="请输入邮箱"
               />
+            </div>
+            <div class="mb-3">
+              <label for="captcha" class="form-label">图片校验码</label>
+              <div class="captcha-row">
+                <div>
+                  <input
+                    type="text"
+                    class="form-control"
+                    id="captcha"
+                    name="captcha"
+                    placeholder="请输入校验码"
+                    autocomplete="off"
+                    required
+                  />
+                </div>
+                <div
+                  class="captcha-box"
+                  id="refreshCaptcha"
+                  style="cursor: pointer"
+                >
+                  <img
+                    src="/verityImg"
+                    width="120"
+                    height="46"
+                    onclick="this.src = '/verityImg?' + Math.random()"
+                  />
+                </div>
+              </div>
             </div>
             <button type="submit" class="btn btn-primary w-100 register-btn">
               立即注册

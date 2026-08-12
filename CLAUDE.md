@@ -102,6 +102,8 @@ controller → service (interface) → service/impl → mapper (MyBatis-Plus Bas
 
 **Teacher override**: if teacher's reservation conflicts with student-only reservations, those students are set to status=3. If any conflict is from another teacher → returns "conflict" (teacher can't override teacher). Teacher's own reservation is auto-approved (status=1). The entire operation is `@Transactional`. Role check via batch `userService.listByIds()`. ADMIN is treated as a student here (no auto-approve, no override) — admin reservations go through the normal approval flow.
 
+**Brute-force protection**: `LoginAttemptService` counts login failures per "username|IP" in memory — 5 consecutive failures lock the account for 15 minutes (reset on successful login). Check-in code entry is limited to 5 wrong attempts per reservation (`too_many_attempts`), counter cleared on success or window expiry. Registration requires the same captcha as login (`/verityImg`, session `verityCode`).
+
 **Check-in flow**: admin approval generates 4-digit `SecureRandom` code. User visits `/reservation/check-in/{id}`, enters code. Validates reservation.reservationStatus==1, reservation.userId ownership (explicit), code match, and time window (startTime-10min ~ startTime+15min). Returns `too_early` or `expired` outside window. Prevents duplicate check-in. `@Transactional`.
 
 **Capacity check**: `apply()` validates `attendeeCount` ≤ `MeetingRoom.capacity`. Returns `over_capacity` if exceeded. Also rejects `startTime < now` → returns `past_time`.

@@ -325,6 +325,8 @@ public class ReservationController {
         switch (result) {
             case "success"            -> model.addAttribute("info", "签到成功！");
             case "wrong_code"         -> model.addAttribute("info", "签到码错误！");
+            case "too_many_attempts"  -> model.addAttribute("info",
+                                            "签到码错误次数过多，本次签到已锁定，请联系管理员！");
             case "too_early"          -> model.addAttribute("info",
                                             "尚未到签到时间（会议开始前10分钟开放）");
             case "expired"            -> model.addAttribute("info",

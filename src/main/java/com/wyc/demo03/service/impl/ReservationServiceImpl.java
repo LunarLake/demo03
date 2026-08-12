@@ -19,6 +19,9 @@ import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
 import java.security.SecureRandom;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentMap;
+import java.util.concurrent.atomic.AtomicInteger;
 
 /**
  * 预约业务核心实现类
@@ -38,6 +41,12 @@ public class ReservationServiceImpl extends ServiceImpl<ReservationMapper, Reser
     private final AttendanceRecordService attendanceRecordService;
     private final MeetingRoomService meetingRoomService;
     private final UserService userService;
+
+    // 签到码连续输错次数上限（4 位数字码防枚举暴力破解）
+    private static final int MAX_CHECKIN_ATTEMPTS = 5;
+
+    // 预约 ID → 签到码输错次数（内存版，单实例部署适用；签到成功/窗口过期时清除）
+    private final ConcurrentMap<Long, AtomicInteger> checkInFailures = new ConcurrentHashMap<>();
 
     /**
      * 安全的随机数生成器，用于生成 4 位签到码。
@@ -260,7 +269,7 @@ public class ReservationServiceImpl extends ServiceImpl<ReservationMapper, Reser
     // ====================================================================
     // 方法四：checkIn —— 现场签到核销
     // ====================================================================
-    // 签到流程分五步校验，每一步失败都会返回对应的错误码：
+    // 签到流程分六步校验，每一步失败都会返回对应的错误码：
     //
     //   【第一步】预约有效性校验
     //     - 预约是否存在
@@ -275,15 +284,19 @@ public class ReservationServiceImpl extends ServiceImpl<ReservationMapper, Reser
     //           窗口关闭：14:15  ← 延后 15 分钟
     //     在此窗口外签到 → too_early（太早）或 expired（已过期）
     //
-    //   【第三步】签到码比对
-    //     用户输入的 4 位数字和数据库中的 checkInCode 比对，
-    //     不匹配 → wrong_code
+    //   【第三步】尝试次数防枚举
+    //     4 位数字码只有 10000 种组合，窗口长达 25 分钟，
+    //     连续输错 5 次 → too_many_attempts（该预约签到永久锁定）
     //
-    //   【第四步】签到记录校验
+    //   【第四步】签到码比对
+    //     用户输入的 4 位数字和数据库中的 checkInCode 比对，
+    //     不匹配 → wrong_code（并累计失败次数）
+    //
+    //   【第五步】签到记录校验
     //     查找 t_attendance_record 中对应的签到记录，
     //     必须是当前用户的记录，否则 → error
     //
-    //   【第五步】防重复签到 ★ 关键
+    //   【第六步】防重复签到 ★ 关键
     //     如果 attendStatus 已经是 1（已签到），说明之前已经签到过了，
     //     返回 already_checked_in，拒绝重复签到。
     //
@@ -297,6 +310,7 @@ public class ReservationServiceImpl extends ServiceImpl<ReservationMapper, Reser
     //   "error"               — 预约不存在/不属于该用户/状态不对
     //   "too_early"           — 签到时间早于窗口开启时间
     //   "expired"             — 签到时间超出窗口关闭时间
+    //   "too_many_attempts"   — 签到码输错次数超过上限，签到已锁定
     //   "wrong_code"          — 签到码不匹配
     //   "already_checked_in"  — 已经签到过了（防重复）
     //   "success"             — 签到成功
@@ -329,23 +343,35 @@ public class ReservationServiceImpl extends ServiceImpl<ReservationMapper, Reser
             return "too_early";   // 还没到签到时间（比如 14:00 的预约，现在是 13:45）
         }
         if (now.isAfter(windowEnd)) {
+            // 窗口关闭 → 清除失败计数，防止 map 无限增长
+            checkInFailures.remove(reservationId);
             return "expired";     // 签到时间已过（比如 14:00 的预约，现在已经是 14:20）
         }
 
-        // ===== 第三步：签到码比对 =====
-        // 用户输入的 4 位数字和数据库中存储的签到码必须完全一致
-        if (!reservation.getCheckInCode().equals(code)) {
-            return "wrong_code";
+        // ===== 第三步：签到码尝试次数防枚举 =====
+        // 4 位数字码只有 10000 种组合，签到窗口长达 25 分钟，必须限制尝试次数
+        AtomicInteger failures = checkInFailures.get(reservationId);
+        if (failures != null && failures.get() >= MAX_CHECKIN_ATTEMPTS) {
+            return "too_many_attempts";
         }
 
-        // ===== 第四步：签到记录校验 =====
+        // ===== 第四步：签到码比对 =====
+        // 用户输入的 4 位数字和数据库中存储的签到码必须完全一致
+        if (!reservation.getCheckInCode().equals(code)) {
+            checkInFailures.computeIfAbsent(reservationId, k -> new AtomicInteger()).incrementAndGet();
+            return "wrong_code";
+        }
+        // 签到码正确 → 清除失败计数
+        checkInFailures.remove(reservationId);
+
+        // ===== 第五步：签到记录校验 =====
         // 查找在审批时（教师）或预约时（教师）创建的签到记录
         AttendanceRecord record = attendanceRecordService.findByReservationId(reservationId);
         if (record == null || !record.getUserId().equals(userId)) {
             return "error";       // 签到记录不存在或不属于当前用户
         }
 
-        // ===== 第五步：防重复签到 =====
+        // ===== 第六步：防重复签到 =====
         // 如果签到记录的 attendStatus 已经是 1，说明之前已经签到成功过。
         // 这个检查在 @Transactional 的保护下执行，防止并发重复签到：
         //  即使两个请求同时到达这里，数据库的行锁会保证只有一个能成功更新。
