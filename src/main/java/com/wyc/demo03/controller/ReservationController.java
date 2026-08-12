@@ -31,7 +31,7 @@ import org.springframework.web.servlet.mvc.support.RedirectAttributes;
  *     GET  /api/room-schedule            — 返回 JSON 日程数据（供甘特图 AJAX 请求）
  *     GET  /my-reservations              — 我的预约列表
  *
- *   【审批组】（教师专属）
+ *   【审批组】（管理员专属）
  *     GET  /reservation/approve-list     — 审批管理列表
  *     POST /reservation/approve          — 批准预约（生成签到码）
  *     POST /reservation/reject           — 拒绝预约
@@ -108,7 +108,7 @@ public class ReservationController {
     // ====================================================================
     // 从 session 取当前用户 ID，查询该用户的所有预约（联表查会议室名称 + 签到状态）。
     //
-    // 路由不受 TeacherInterceptor 拦截 → 学生和教师都能访问。
+    // 路由不受角色拦截器拦截 → 所有登录用户都能访问。
     @GetMapping("/my-reservations")
     public String myReservations(Model model, HttpSession session) {
         Long userId = (Long) session.getAttribute("Id");
@@ -118,9 +118,9 @@ public class ReservationController {
     }
 
     // ====================================================================
-    // GET /reservation/approve-list —— 待审批列表（教师专属）
+    // GET /reservation/approve-list —— 待审批列表（管理员专属）
     // ====================================================================
-    // 路由受 TeacherInterceptor 保护 → 学生访问会被重定向到首页。
+    // 路由受 AdminInterceptor 保护 → 非管理员访问会被重定向到首页。
     // 查询所有 status=0（待审批）的预约，联表展示申请人姓名和会议室名称。
     @GetMapping("/reservation/approve-list")
     public String approveList(Model model) {
@@ -129,14 +129,14 @@ public class ReservationController {
     }
 
     // ====================================================================
-    // POST /reservation/approve —— 批准预约（教师专属）
+    // POST /reservation/approve —— 批准预约（管理员专属）
     // ====================================================================
     // 点击"批准"按钮后调用。
     //
     // 参数 id 来自表单隐藏字段 <input type="hidden" name="id" th:value="${r.id}">
     // 不需要 @RequestParam，因为 Spring MVC 会自动绑定同名表单字段。
     //
-    // Service 返回签到码 → Controller 拼入提示信息展示给教师。
+    // Service 返回签到码 → Controller 拼入提示信息展示给管理员。
     // 失败时返回 "error" → 显示"审批失败"（通常因为该预约已被其他人审批/取消）。
     @PostMapping("/reservation/approve")
     public String approve(Long id, RedirectAttributes ra) {
@@ -144,14 +144,14 @@ public class ReservationController {
         if ("error".equals(code)) {
             ra.addFlashAttribute("info", "审批失败！");
         } else {
-            // 签到码展示给教师，教师需要告知学生（或投屏展示）
+            // 签到码展示给管理员，管理员需要告知学生（或投屏展示）
             ra.addFlashAttribute("info", "审批通过，签到码：" + code);
         }
         return "redirect:/reservation/approve-list";
     }
 
     // ====================================================================
-    // POST /reservation/reject —— 拒绝预约（教师专属）
+    // POST /reservation/reject —— 拒绝预约（管理员专属）
     // ====================================================================
     // Service 层有防御：只有 status=0 的预约才能被拒绝，
     // 已通过/已拒绝/被覆盖/已取消的预约即使点了拒绝也会被静默忽略。
@@ -268,9 +268,9 @@ public class ReservationController {
     }
 
     // ====================================================================
-    // GET /reservation/detail/{id} —— 预约详情查看（教师专属）
+    // GET /reservation/detail/{id} —— 预约详情查看（管理员专属）
     // ====================================================================
-    // 路由受 TeacherInterceptor 保护。
+    // 路由受 AdminInterceptor 保护。
     // 联表查询预约、用户、会议室、签到记录的完整信息。
     // 如果预约不存在（detail==null），重定向回审批列表。
     @GetMapping("/reservation/detail/{id}")

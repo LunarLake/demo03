@@ -1,81 +1,202 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="zh-CN">
-<head>
-    <th:block th:replace="~{fragments/common-head :: head('用户注册')}"></th:block>
+  <head>
+    <th:block
+      th:replace="~{fragments/common-head :: head('用户注册')}"
+    ></th:block>
     <style>
-        * { box-sizing: border-box; }
-        body {
-            margin: 0; min-height: 100vh; color: #0f172a;
-            font-family: "Outfit", "Noto Sans SC", "PingFang SC", "Microsoft YaHei", sans-serif;
-            background: radial-gradient(1200px 420px at -10% -10%, #bfdbfe66 0%, transparent 60%),
-                        radial-gradient(900px 360px at 110% 120%, #67e8f966 0%, transparent 60%),
-                        linear-gradient(135deg, #eff6ff 0%, #e0f2fe 100%);
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        min-height: 100vh;
+        color: #0f172a;
+        font-family:
+          "Outfit", "Noto Sans SC", "PingFang SC", "Microsoft YaHei", sans-serif;
+        background:
+          radial-gradient(
+            1200px 420px at -10% -10%,
+            #bfdbfe66 0%,
+            transparent 60%
+          ),
+          radial-gradient(
+            900px 360px at 110% 120%,
+            #67e8f966 0%,
+            transparent 60%
+          ),
+          linear-gradient(135deg, #eff6ff 0%, #e0f2fe 100%);
+      }
+      .register-shell {
+        min-height: 100vh;
+        display: grid;
+        grid-template-columns: 1.1fr 1fr;
+        gap: 2rem;
+        padding: 2.25rem;
+      }
+      .brand-panel {
+        padding: 2.25rem;
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+      }
+      .brand-logo {
+        width: 52px;
+        height: 52px;
+        border-radius: 14px;
+        background: linear-gradient(135deg, #38bdf8, #0ea5e9);
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 1.4rem;
+        margin-bottom: 1rem;
+      }
+      .brand-title {
+        font-size: clamp(1.9rem, 2.8vw, 2.8rem);
+        line-height: 1.1;
+        margin: 0;
+      }
+      .brand-subtitle {
+        margin-top: 0.9rem;
+        color: #64748b;
+      }
+      .form-panel {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
+      .register-card {
+        width: min(100%, 500px);
+        background: #fff;
+        border: 1px solid #dbe7f3;
+        border-radius: 24px;
+        padding: 2rem;
+        box-shadow: 0 20px 40px rgba(15, 23, 42, 0.12);
+      }
+      .register-title {
+        font-size: 1.65rem;
+        margin-bottom: 0.25rem;
+      }
+      .register-desc {
+        color: #475569;
+        margin-bottom: 1.5rem;
+      }
+      .form-label {
+        font-weight: 600;
+        font-size: 0.92rem;
+        margin-bottom: 0.35rem;
+      }
+      .form-control,
+      .form-select {
+        border-color: #cbd5e1;
+        min-height: 46px;
+      }
+      .form-control:focus,
+      .form-select:focus {
+        border-color: #0284c7;
+        box-shadow: 0 0 0 0.18rem rgba(2, 132, 199, 0.18);
+      }
+      .register-btn {
+        min-height: 46px;
+        font-weight: 600;
+        border: 0;
+        background: linear-gradient(135deg, #0ea5e9 0%, #0369a1 100%);
+      }
+      .register-btn:hover {
+        filter: brightness(0.97);
+      }
+      .footer-note {
+        margin-top: 1rem;
+        color: #475569;
+        font-size: 0.9rem;
+        text-align: center;
+      }
+      .footer-note a {
+        color: #0369a1;
+        font-weight: 600;
+        text-decoration: none;
+      }
+      @media (max-width: 991.98px) {
+        .register-shell {
+          grid-template-columns: 1fr;
+          padding: 1.2rem;
         }
-        .register-shell { min-height: 100vh; display: grid; grid-template-columns: 1.1fr 1fr; gap: 2rem; padding: 2.25rem; }
-        .brand-panel { padding: 2.25rem; display: flex; flex-direction: column; justify-content: center; }
-        .brand-logo { width: 52px; height: 52px; border-radius: 14px; background: linear-gradient(135deg, #38bdf8, #0ea5e9);
-            display: inline-flex; align-items: center; justify-content: center; font-size: 1.4rem; margin-bottom: 1rem; }
-        .brand-title { font-size: clamp(1.9rem, 2.8vw, 2.8rem); line-height: 1.1; margin: 0; }
-        .brand-subtitle { margin-top: 0.9rem; color: #64748b; }
-        .form-panel { display: flex; align-items: center; justify-content: center; }
-        .register-card { width: min(100%, 500px); background: #fff; border: 1px solid #dbe7f3;
-            border-radius: 24px; padding: 2rem; box-shadow: 0 20px 40px rgba(15, 23, 42, 0.12); }
-        .register-title { font-size: 1.65rem; margin-bottom: 0.25rem; }
-        .register-desc { color: #475569; margin-bottom: 1.5rem; }
-        .form-label { font-weight: 600; font-size: 0.92rem; margin-bottom: 0.35rem; }
-        .form-control, .form-select { border-color: #cbd5e1; min-height: 46px; }
-        .form-control:focus, .form-select:focus { border-color: #0284c7; box-shadow: 0 0 0 0.18rem rgba(2, 132, 199, 0.18); }
-        .register-btn { min-height: 46px; font-weight: 600; border: 0; background: linear-gradient(135deg, #0ea5e9 0%, #0369a1 100%); }
-        .register-btn:hover { filter: brightness(0.97); }
-        .footer-note { margin-top: 1rem; color: #475569; font-size: 0.9rem; text-align: center; }
-        .footer-note a { color: #0369a1; font-weight: 600; text-decoration: none; }
-        @media (max-width: 991.98px) {
-            .register-shell { grid-template-columns: 1fr; padding: 1.2rem; }
-        }
+      }
     </style>
-</head>
-<body>
-<div class="register-shell">
-    <section class="brand-panel">
+  </head>
+  <body>
+    <div class="register-shell">
+      <section class="brand-panel">
         <div>
-            <div class="brand-logo"><i class="bi bi-person-plus text-white"></i></div>
-            <h1 class="brand-title">创建账号</h1>
-            <p class="brand-subtitle">注册后即可预约会议室，提交申请等待教师审批</p>
+          <div class="brand-logo">
+            <i class="bi bi-person-plus text-white"></i>
+          </div>
+          <h1 class="brand-title">创建账号</h1>
+          <p class="brand-subtitle">
+            注册后即可预约会议室，提交申请等待教师审批
+          </p>
         </div>
-    </section>
-    <section class="form-panel">
+      </section>
+      <section class="form-panel">
         <div class="register-card">
-            <h2 class="register-title">用户注册</h2>
-            <p class="register-desc">请输入基础信息完成账号注册</p>
-            <form th:action="@{/registerAction}" method="post" novalidate>
-                <div class="mb-3">
-                    <label for="username" class="form-label">用户名</label>
-                    <input type="text" class="form-control" id="username" name="username" placeholder="请输入用户名" required>
-                </div>
-                <div class="mb-3">
-                    <label for="password" class="form-label">密码</label>
-                    <input type="password" class="form-control" id="password" name="password" placeholder="请输入密码" required>
-                </div>
-                <div class="mb-3">
-                    <label for="name" class="form-label">姓名</label>
-                    <input type="text" class="form-control" id="name" name="name" placeholder="请输入真实姓名" required>
-                </div>
-                <div class="mb-3">
-                    <label for="role" class="form-label">角色</label>
-                    <select class="form-select" id="role" name="role" required>
-                        <option value="STUDENT">学生</option>
-                        <option value="TEACHER">教师</option>
-                    </select>
-                </div>
-                <div class="mb-3">
-                    <label for="email" class="form-label">邮箱</label>
-                    <input type="email" class="form-control" id="email" name="email" placeholder="请输入邮箱">
-                </div>
-                <button type="submit" class="btn btn-primary w-100 register-btn">立即注册</button>
-            </form>
-            <p class="footer-note">已有账号？<a th:href="@{/login}">返回登录</a></p>
+          <h2 class="register-title">用户注册</h2>
+          <p class="register-desc">请输入基础信息完成账号注册</p>
+          <form th:action="@{/registerAction}" method="post" novalidate>
+            <div class="mb-3">
+              <label for="username" class="form-label">用户名</label>
+              <input
+                type="text"
+                class="form-control"
+                id="username"
+                name="username"
+                placeholder="请输入用户名"
+                required
+              />
+            </div>
+            <div class="mb-3">
+              <label for="password" class="form-label">密码</label>
+              <input
+                type="password"
+                class="form-control"
+                id="password"
+                name="password"
+                placeholder="请输入密码"
+                required
+              />
+            </div>
+            <div class="mb-3">
+              <label for="name" class="form-label">姓名</label>
+              <input
+                type="text"
+                class="form-control"
+                id="name"
+                name="name"
+                placeholder="请输入真实姓名"
+                required
+              />
+            </div>
+            <div class="mb-3">
+              <label for="email" class="form-label">邮箱</label>
+              <input
+                type="email"
+                class="form-control"
+                id="email"
+                name="email"
+                placeholder="请输入邮箱"
+              />
+            </div>
+            <button type="submit" class="btn btn-primary w-100 register-btn">
+              立即注册
+            </button>
+            <p class="text-muted small mt-2 mb-0">
+              账号默认为学生角色，教师/管理员账号由系统统一创建
+            </p>
+          </form>
+          <p class="footer-note">
+            已有账号？<a th:href="@{/login}">返回登录</a>
+          </p>
         </div>
-    </section>
-</div>
-</body>
+      </section>
+    </div>
+  </body>
 </html>

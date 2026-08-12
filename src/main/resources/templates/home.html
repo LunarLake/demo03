@@ -1,71 +1,91 @@
-<!DOCTYPE html>
+<!doctype html>
 <html xmlns:th="http://www.thymeleaf.org">
-<head>
+  <head>
     <th:block th:replace="~{fragments/common-head :: head('首页')}"></th:block>
-</head>
-<body class="d-flex">
-<th:block th:replace="~{fragments/sidebar :: sidebar}"></th:block>
-<main class="content-area flex-grow-1">
-    <th:block th:replace="~{fragments/header :: header('控制台总览')}"></th:block>
-    <section class="container-fluid py-4 px-3 px-md-4">
+  </head>
+  <body class="d-flex">
+    <th:block th:replace="~{fragments/sidebar :: sidebar}"></th:block>
+    <main class="content-area flex-grow-1">
+      <th:block
+        th:replace="~{fragments/header :: header('控制台总览')}"
+      ></th:block>
+      <section class="container-fluid py-4 px-3 px-md-4">
         <div class="row g-3">
-            <div class="col-12 col-md-6 col-xl-3">
-                <div class="card summary-card">
-                    <div class="card-body text-center py-4">
-                        <i class="bi bi-door-open text-info" style="font-size:2rem"></i>
-                        <p class="text-muted mt-2 mb-1">可用会议室</p>
-                        <h2 class="h4 mb-0" th:text="${#lists.size(rooms) ?: 0}">0</h2>
-                    </div>
-                </div>
+          <div class="col-12 col-md-6 col-xl-3">
+            <div class="card summary-card">
+              <div class="card-body text-center py-4">
+                <i
+                  class="bi bi-door-open text-info"
+                  style="font-size: 2rem"
+                ></i>
+                <p class="text-muted mt-2 mb-1">可用会议室</p>
+                <h2 class="h4 mb-0" th:text="${#lists.size(rooms) ?: 0}">0</h2>
+              </div>
             </div>
-            <div class="col-12 col-md-6 col-xl-3">
-                <div class="card summary-card">
-                    <div class="card-body text-center py-4">
-                        <i class="bi bi-calendar-check text-success" style="font-size:2rem"></i>
-                        <p class="text-muted mt-2 mb-1">我的预约</p>
-                        <h2 class="h4 mb-0" th:text="${myReservationCount}">0</h2>
-                    </div>
-                </div>
+          </div>
+          <div class="col-12 col-md-6 col-xl-3">
+            <div class="card summary-card">
+              <div class="card-body text-center py-4">
+                <i
+                  class="bi bi-calendar-check text-success"
+                  style="font-size: 2rem"
+                ></i>
+                <p class="text-muted mt-2 mb-1">我的预约</p>
+                <h2 class="h4 mb-0" th:text="${myReservationCount}">0</h2>
+              </div>
             </div>
-            <div class="col-12 col-md-6 col-xl-3">
-                <div class="card summary-card">
-                    <div class="card-body text-center py-4">
-                        <i class="bi bi-clipboard-check text-warning" style="font-size:2rem"></i>
-                        <p class="text-muted mt-2 mb-1">待审批</p>
-                        <h2 class="h4 mb-0" th:text="${pendingCount}">0</h2>
-                    </div>
-                </div>
+          </div>
+          <div class="col-12 col-md-6 col-xl-3">
+            <div class="card summary-card">
+              <div class="card-body text-center py-4">
+                <i
+                  class="bi bi-clipboard-check text-warning"
+                  style="font-size: 2rem"
+                ></i>
+                <p class="text-muted mt-2 mb-1">待审批</p>
+                <h2 class="h4 mb-0" th:text="${pendingCount}">0</h2>
+              </div>
             </div>
-            <div class="col-12 col-md-6 col-xl-3">
-                <div class="card summary-card">
-                    <div class="card-body text-center py-4">
-                        <i class="bi bi-person-check text-primary" style="font-size:2rem"></i>
-                        <p class="text-muted mt-2 mb-1">今日签到</p>
-                        <h2 class="h4 mb-0" th:text="${todayCheckIn}">0</h2>
-                    </div>
-                </div>
+          </div>
+          <div class="col-12 col-md-6 col-xl-3">
+            <div class="card summary-card">
+              <div class="card-body text-center py-4">
+                <i
+                  class="bi bi-person-check text-primary"
+                  style="font-size: 2rem"
+                ></i>
+                <p class="text-muted mt-2 mb-1">今日签到</p>
+                <h2 class="h4 mb-0" th:text="${todayCheckIn}">0</h2>
+              </div>
             </div>
+          </div>
         </div>
         <div class="row mt-4">
-            <div class="col-12">
-                <div class="card summary-card">
-                    <div class="card-header bg-white border-0">
-                        <h2 class="h5 mb-0">欢迎使用会议室预约系统</h2>
-                    </div>
-                    <div class="card-body">
-                        <p th:if="${session.name != null}">
-                            您好，<strong th:text="${session.name}"></strong>！
-                            您的角色是 <span class="badge" th:classappend="${session.role == 'TEACHER'} ? 'bg-primary' : 'bg-success'" th:text="${session.role}"></span>
-                        </p>
-                        <p>本系统提供会议室的在线预约、审批管理、签到记录等功能。</p>
-                        <a href="/rooms" class="btn btn-primary">浏览会议室</a>
-                        <a href="/my-reservations" class="btn btn-outline-primary ms-2">查看我的预约</a>
-                    </div>
-                </div>
+          <div class="col-12">
+            <div class="card summary-card">
+              <div class="card-header bg-white border-0">
+                <h2 class="h5 mb-0">欢迎使用会议室预约系统</h2>
+              </div>
+              <div class="card-body">
+                <p th:if="${session.name != null}">
+                  您好，<strong th:text="${session.name}"></strong>！ 您的角色是
+                  <span
+                    class="badge"
+                    th:classappend="${session.role == 'TEACHER' ? 'bg-primary' : (session.role == 'ADMIN' ? 'bg-danger' : 'bg-success')}"
+                    th:text="${T(com.wyc.demo03.common.RoleConstant).displayName(session.role)}"
+                  ></span>
+                </p>
+                <p>本系统提供会议室的在线预约、审批管理、签到记录等功能。</p>
+                <a href="/rooms" class="btn btn-primary">浏览会议室</a>
+                <a href="/my-reservations" class="btn btn-outline-primary ms-2"
+                  >查看我的预约</a
+                >
+              </div>
             </div>
+          </div>
         </div>
-    </section>
-</main>
-<th:block th:replace="~{fragments/common-scripts :: scripts}"></th:block>
-</body>
+      </section>
+    </main>
+    <th:block th:replace="~{fragments/common-scripts :: scripts}"></th:block>
+  </body>
 </html>

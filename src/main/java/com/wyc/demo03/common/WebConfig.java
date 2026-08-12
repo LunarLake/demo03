@@ -12,6 +12,7 @@ public class WebConfig implements WebMvcConfigurer {
     private final RoleInterceptor roleInterceptor;
     private final LogInterceptor logInterceptor;
     private final TeacherInterceptor teacherInterceptor;
+    private final AdminInterceptor adminInterceptor;
     // 注册拦截器，设置拦截路径和排除路径
     @Override
     public void addInterceptors(InterceptorRegistry registry) {
@@ -33,11 +34,17 @@ public class WebConfig implements WebMvcConfigurer {
                         "/**/*.css", "/**/*.js", "/**/*.jpg", "/**/*.png", "/**/*.gif", "/**/*.ico"
                 );
 
+        // 教师：会议室管理
         registry.addInterceptor(teacherInterceptor)
                 .addPathPatterns(
-                        "/room/add", "/room/update", "/room/delete/**",
-                        "/reservation/approve**", "/reservation/reject",
-                        "/reservation/detail/**",
+                        "/room/add", "/room/update", "/room/delete/**"
+                );
+
+        // 管理员：审批管理 + 控制台总览 + 系统日志
+        registry.addInterceptor(adminInterceptor)
+                .addPathPatterns(
+                        "/reservation/approve", "/reservation/approve-list",
+                        "/reservation/reject", "/reservation/detail/**",
                         "/admin/**",
                         "/api/report-*"
                 );

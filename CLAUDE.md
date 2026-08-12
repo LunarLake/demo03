@@ -29,79 +29,80 @@ controller → service (interface) → service/impl → mapper (MyBatis-Plus Bas
 
 ### Entities & DB column mappings
 
-| Entity | Table | Fields (Java → DB) |
-|--------|-------|---------------------|
-| `User` | `t_user` | id, username, password, name, role(STUDENT/TEACHER), email |
-| `MeetingRoom` | `t_meeting_room` | id, roomName, capacity, equipment, roomStatus(0正常/1维护) |
-| `Reservation` | `t_reservation` | id, userId, roomId, startTime, endTime, reservationStatus(0待审/1通过/2拒绝/3被覆盖/4用户取消/5超时释放), checkInCode, attendeeCount |
-| `AttendanceRecord` | `t_attendance_record` | id, reservationId, userId, checkInTime, attendStatus, ip |
-| `Log` | `t_log` | id, username, url, ip, timestamp |
+| Entity             | Table                 | Fields (Java → DB)                                                                                                                   |
+| ------------------ | --------------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
+| `User`             | `t_user`              | id, username, password, name, role(STUDENT/TEACHER/ADMIN), email                                                                     |
+| `MeetingRoom`      | `t_meeting_room`      | id, roomName, capacity, equipment, roomStatus(0正常/1维护)                                                                           |
+| `Reservation`      | `t_reservation`       | id, userId, roomId, startTime, endTime, reservationStatus(0待审/1通过/2拒绝/3被覆盖/4用户取消/5超时释放), checkInCode, attendeeCount |
+| `AttendanceRecord` | `t_attendance_record` | id, reservationId, userId, checkInTime, attendStatus, ip                                                                             |
+| `Log`              | `t_log`               | id, username, url, ip, timestamp                                                                                                     |
 
 `AttendanceRecord.attendStatus` maps to column `attend_status` via default camelCase→snake_case conversion. Similarly `Reservation.reservationStatus` → `reservation_status` and `MeetingRoom.roomStatus` → `room_status`.
 
 ### Controller endpoints
 
-| Controller | Endpoint | Method | Role | Purpose |
-|-----------|----------|--------|------|---------|
-| **MainController** | `/`, `/index` | GET | any | Home dashboard: room count + my-reservation count + pending count + today check-in |
-| | `/login` | GET | — | Login page (captcha via `/verityImg`) |
-| | `/loginAction` | POST | — | Authenticate, regenerate session, set session attrs |
-| | `/register` | GET | — | Registration page |
-| | `/registerAction` | POST | — | Create user, catch duplicate username |
-| | `/logout` | GET | any | Invalidate session |
-| | `/verityImg` | GET | — | Generate captcha image (Hutool LineCaptcha) |
-| **RoomController** | `/rooms` | GET | any | Room list with keyword search |
-| | `/room/add` | POST | TEACHER | Add meeting room |
-| | `/room/update` | POST | TEACHER | Update room info |
-| | `/room/delete/{id}` | POST | TEACHER | Delete room (checks for active reservations first) |
-| **ReservationController** | `/reservation/apply` | POST | any | Submit reservation (student→status=0, teacher→status=1); validates attendeeCount ≤ room capacity |
-| | `/my-reservations` | GET | any | User's reservations with attend_status |
-| | `/reservation/approve-list` | GET | TEACHER | Pending approvals (status=0) |
-| | `/reservation/approve` | POST | TEACHER | Approve → status=1 + generate 4-digit code |
-| | `/reservation/reject` | POST | TEACHER | Reject → status=2 |
-| | `/reservation/new` | GET | any | ECharts timeline page; validates room exists + roomStatus=0 before rendering |
-| | `/api/room-schedule` | GET | any | JSON: approved reservations (start_time, end_time, userName, role) for room+date |
-| | `/reservation/cancel/{id}` | POST | any | Cancel own reservation → status=4 (only status 0/1, not if checked in) |
-| | `/reservation/check-in/{id}` | GET | any | Check-in code entry page |
-| | `/reservation/check-in-action` | POST | any | Verify code + time window (start-10min ~ start+15min), update attend_status=1 |
-| | `/reservation/detail/{id}` | GET | TEACHER | Reservation + attendance detail view |
-| **LogController** | `/admin/logs` | GET | TEACHER | System access log list |
-| | `/admin/dashboard` | GET | TEACHER | ECharts dashboard page |
-| | `/api/report-room-usage` | GET | TEACHER | JSON: per-room reservation count |
-| | `/api/report-busy-hours` | GET | TEACHER | JSON: per-hour reservation count |
-| | `/api/report-attendance-rate` | GET | TEACHER | JSON: attended vs absent count |
+| Controller                | Endpoint                       | Method | Role    | Purpose                                                                                          |
+| ------------------------- | ------------------------------ | ------ | ------- | ------------------------------------------------------------------------------------------------ |
+| **MainController**        | `/`, `/index`                  | GET    | any     | Home dashboard: room count + my-reservation count + pending count + today check-in               |
+|                           | `/login`                       | GET    | —       | Login page (captcha via `/verityImg`)                                                            |
+|                           | `/loginAction`                 | POST   | —       | Authenticate, regenerate session, set session attrs                                              |
+|                           | `/register`                    | GET    | —       | Registration page                                                                                |
+|                           | `/registerAction`              | POST   | —       | Create user, catch duplicate username (role forced to STUDENT)                                   |
+|                           | `/logout`                      | GET    | any     | Invalidate session                                                                               |
+|                           | `/verityImg`                   | GET    | —       | Generate captcha image (Hutool LineCaptcha)                                                      |
+| **RoomController**        | `/rooms`                       | GET    | any     | Room list with keyword search                                                                    |
+|                           | `/room/add`                    | POST   | TEACHER | Add meeting room                                                                                 |
+|                           | `/room/update`                 | POST   | TEACHER | Update room info                                                                                 |
+|                           | `/room/delete/{id}`            | POST   | TEACHER | Delete room (checks for active reservations first)                                               |
+| **ReservationController** | `/reservation/apply`           | POST   | any     | Submit reservation (student→status=0, teacher→status=1); validates attendeeCount ≤ room capacity |
+|                           | `/my-reservations`             | GET    | any     | User's reservations with attend_status                                                           |
+|                           | `/reservation/approve-list`    | GET    | ADMIN   | Pending approvals (status=0)                                                                     |
+|                           | `/reservation/approve`         | POST   | ADMIN   | Approve → status=1 + generate 4-digit code                                                       |
+|                           | `/reservation/reject`          | POST   | ADMIN   | Reject → status=2                                                                                |
+|                           | `/reservation/new`             | GET    | any     | ECharts timeline page; validates room exists + roomStatus=0 before rendering                     |
+|                           | `/api/room-schedule`           | GET    | any     | JSON: approved reservations (start_time, end_time, userName, role) for room+date                 |
+|                           | `/reservation/cancel/{id}`     | POST   | any     | Cancel own reservation → status=4 (only status 0/1, not if checked in)                           |
+|                           | `/reservation/check-in/{id}`   | GET    | any     | Check-in code entry page                                                                         |
+|                           | `/reservation/check-in-action` | POST   | any     | Verify code + time window (start-10min ~ start+15min), update attend_status=1                    |
+|                           | `/reservation/detail/{id}`     | GET    | ADMIN   | Reservation + attendance detail view                                                             |
+| **LogController**         | `/admin/logs`                  | GET    | ADMIN   | System access log list                                                                           |
+|                           | `/admin/dashboard`             | GET    | ADMIN   | ECharts dashboard page                                                                           |
+|                           | `/api/report-room-usage`       | GET    | ADMIN   | JSON: per-room reservation count                                                                 |
+|                           | `/api/report-busy-hours`       | GET    | ADMIN   | JSON: per-hour reservation count                                                                 |
+|                           | `/api/report-attendance-rate`  | GET    | ADMIN   | JSON: attended vs absent count                                                                   |
 
 ### Session attributes (set by loginAction)
 
-| Key | Type | Used by |
-|-----|------|---------|
-| `username` | String | RoleInterceptor (auth check), LogInterceptor (log record) |
-| `Id` | Long | ReservationController, check-in flow, home page count |
-| `name` | String | header.html, home.html greeting |
-| `role` | String | sidebar (menu visibility), room/reservation controllers (TEACHER gate), Gantt chart (role-based color + override) |
-| `email` | String | (stored, not displayed) |
-| `verityCode` | String | loginAction (captcha validation, removed after check) |
+| Key          | Type   | Used by                                                                                                       |
+| ------------ | ------ | ------------------------------------------------------------------------------------------------------------- |
+| `username`   | String | RoleInterceptor (auth check), LogInterceptor (log record)                                                     |
+| `Id`         | Long   | ReservationController, check-in flow, home page count                                                         |
+| `name`       | String | header.html, home.html greeting                                                                               |
+| `role`       | String | sidebar (menu visibility), role constants in `common/RoleConstant`, Gantt chart (role-based color + override) |
+| `email`      | String | (stored, not displayed)                                                                                       |
+| `verityCode` | String | loginAction (captcha validation, removed after check)                                                         |
 
 ### Interceptors (registered in WebConfig)
 
 - **RoleInterceptor** — checks `session.username != null`, redirects to `/login`.
 - **LogInterceptor** — records every request to `t_log` with username (or "匿名"), IP, URL, timestamp. Writes asynchronously via `LogService.saveAsync()`.
-- **TeacherInterceptor** — checks `session.role == "TEACHER"`, redirects to `/` if not. Covers `/room/add`, `/room/update`, `/room/delete/**`, `/reservation/approve**`, `/reservation/reject`, `/reservation/detail/**`, `/admin/**`, `/api/report-*`.
+- **TeacherInterceptor** — checks `session.role == "TEACHER"`, redirects to `/` if not. Covers `/room/add`, `/room/update`, `/room/delete/**` (room management only).
+- **AdminInterceptor** — checks `session.role == "ADMIN"`, redirects to `/` if not. Covers `/reservation/approve`, `/reservation/approve-list`, `/reservation/reject`, `/reservation/detail/**`, `/admin/**`, `/api/report-*` (approval management + dashboard + logs).
 - **Excluded paths** (RoleInterceptor + LogInterceptor): `/verityImg`, `/error`, `/css/**`, `/js/**`, `/images/**`, `/**/*.{css,js,jpg,png,gif,ico}`
 - **RoleInterceptor additional excludes**: `/login`, `/loginAction`, `/register`, `/registerAction`
-- **TeacherInterceptor** uses `addPathPatterns` only (no excludes needed).
+- **Teacher/AdminInterceptor** use `addPathPatterns` only (no excludes needed).
 
 ### Core business logic
 
-**Password hashing**: BCrypt via Hutool `cn.hutool.crypto.digest.BCrypt`. `UserMapper.findByUsername()` looks up user by username only (no password in SQL). `UserServiceImpl.login()` uses `BCrypt.checkpw()` to verify. `UserServiceImpl.register()` calls `BCrypt.hashpw()` before `super.save()`. Existing plaintext passwords in DB must be re-hashed manually after first deploy.
+**Password hashing**: BCrypt via Hutool `cn.hutool.crypto.digest.BCrypt`. `UserMapper.findByUsername()` looks up user by username only (no password in SQL). `UserServiceImpl.login()` uses `BCrypt.checkpw()` to verify. `UserServiceImpl.register()` **forces `role=STUDENT`** (blocks forged `role=TEACHER/ADMIN` registration) and calls `BCrypt.hashpw()` before `super.save()`. TEACHER/ADMIN accounts are created manually via `sql/init-admin.sql`. Existing plaintext passwords in DB must be re-hashed manually after first deploy.
 
 **Input validation**: JSR-380 annotations on entities (`@NotNull` on roomId/startTime/endTime, `@Positive` on attendeeCount, `@NotBlank` on username/password/name). Controllers use `@Valid` + `BindingResult`. Requires `spring-boot-starter-validation` in pom.xml.
 
 **Conflict detection** (ReservationMapper.findConflicting): checks `r.start_time < #{endTime} AND r.end_time > #{startTime}` for same room with reservation_status 0 or 1. Detects ALL conflicts (student + teacher).
 
-**Teacher override**: if teacher's reservation conflicts with student-only reservations, those students are set to status=3. If any conflict is from another teacher → returns "conflict" (teacher can't override teacher). Teacher's own reservation is auto-approved (status=1). The entire operation is `@Transactional`. Role check via batch `userService.listByIds()`.
+**Teacher override**: if teacher's reservation conflicts with student-only reservations, those students are set to status=3. If any conflict is from another teacher → returns "conflict" (teacher can't override teacher). Teacher's own reservation is auto-approved (status=1). The entire operation is `@Transactional`. Role check via batch `userService.listByIds()`. ADMIN is treated as a student here (no auto-approve, no override) — admin reservations go through the normal approval flow.
 
-**Check-in flow**: teacher approval generates 4-digit `SecureRandom` code. User visits `/reservation/check-in/{id}`, enters code. Validates reservation.reservationStatus==1, reservation.userId ownership (explicit), code match, and time window (startTime-10min ~ startTime+15min). Returns `too_early` or `expired` outside window. Prevents duplicate check-in. `@Transactional`.
+**Check-in flow**: admin approval generates 4-digit `SecureRandom` code. User visits `/reservation/check-in/{id}`, enters code. Validates reservation.reservationStatus==1, reservation.userId ownership (explicit), code match, and time window (startTime-10min ~ startTime+15min). Returns `too_early` or `expired` outside window. Prevents duplicate check-in. `@Transactional`.
 
 **Capacity check**: `apply()` validates `attendeeCount` ≤ `MeetingRoom.capacity`. Returns `over_capacity` if exceeded. Also rejects `startTime < now` → returns `past_time`.
 

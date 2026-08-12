@@ -13,10 +13,10 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * 日志与管理看板控制器 —— 教师专属
+ * 日志与管理看板控制器 —— 管理员专属
  *
- * 所有路由均受 TeacherInterceptor 保护（拦截路径 /admin/** 和 /api/report-*），
- * 学生访问会被重定向到首页。与业务实体无 CRUD 操作的日志/统计类页面统一放在这里。
+ * 所有路由均受 AdminInterceptor 保护（拦截路径 /admin/** 和 /api/report-*），
+ * 非管理员访问会被重定向到首页。与业务实体无 CRUD 操作的日志/统计类页面统一放在这里。
  *
  * 路由分两组：
  *   【页面路由】返回 Thymeleaf 视图
