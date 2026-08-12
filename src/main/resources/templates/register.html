@@ -142,6 +142,7 @@
           <h2 class="register-title">用户注册</h2>
           <p class="register-desc">请输入基础信息完成账号注册</p>
           <form th:action="@{/registerAction}" method="post" novalidate>
+            <input type="hidden" name="_csrf" th:value="${_csrf}" />
             <div class="mb-3">
               <label for="username" class="form-label">用户名</label>
               <input

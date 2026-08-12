@@ -1,40 +1,72 @@
-<!DOCTYPE html>
+<!doctype html>
 <html xmlns:th="http://www.thymeleaf.org">
-<head>
-    <th:block th:replace="~{fragments/common-head :: head('会议签到')}"></th:block>
-</head>
-<body class="d-flex">
-<th:block th:replace="~{fragments/sidebar :: sidebar}"></th:block>
-<main class="content-area flex-grow-1">
-    <th:block th:replace="~{fragments/header :: header('会议签到')}"></th:block>
-    <section class="container-fluid py-4 px-3 px-md-4">
+  <head>
+    <th:block
+      th:replace="~{fragments/common-head :: head('会议签到')}"
+    ></th:block>
+  </head>
+  <body class="d-flex">
+    <th:block th:replace="~{fragments/sidebar :: sidebar}"></th:block>
+    <main class="content-area flex-grow-1">
+      <th:block
+        th:replace="~{fragments/header :: header('会议签到')}"
+      ></th:block>
+      <section class="container-fluid py-4 px-3 px-md-4">
         <div class="row justify-content-center">
-            <div class="col-md-6 col-lg-4">
-                <div class="card summary-card">
-                    <div class="card-body text-center py-4">
-                        <i class="bi bi-qr-code-scan text-primary" style="font-size:3rem"></i>
-                        <h3 class="mt-3">签到验证</h3>
-                        <p class="text-muted">请输入预约时教师提供的4位签到码</p>
-                        <p th:if="${info != null}" class="fw-bold"
-                           th:classappend="${#strings.contains(info, '成功')} ? 'text-success' : 'text-danger'"
-                           th:text="${info}"></p>
-                        <form th:action="@{/reservation/check-in-action}" method="post" class="mt-3">
-                            <input type="hidden" name="reservationId" th:value="${reservationId}">
-                            <div class="mb-3">
-                                <input type="text" class="form-control form-control-lg text-center"
-                                       id="code" name="code" placeholder="请输入4位签到码"
-                                       maxlength="4" pattern="[0-9]{4}" required
-                                       style="letter-spacing:1rem; font-size:1.5rem">
-                            </div>
-                            <button type="submit" class="btn btn-primary btn-lg w-100">确认签到</button>
-                        </form>
-                        <a href="/my-reservations" class="btn btn-outline-secondary mt-3">返回我的预约</a>
-                    </div>
-                </div>
+          <div class="col-md-6 col-lg-4">
+            <div class="card summary-card">
+              <div class="card-body text-center py-4">
+                <i
+                  class="bi bi-qr-code-scan text-primary"
+                  style="font-size: 3rem"
+                ></i>
+                <h3 class="mt-3">签到验证</h3>
+                <p class="text-muted">请输入预约时教师提供的4位签到码</p>
+                <p
+                  th:if="${info != null}"
+                  class="fw-bold"
+                  th:classappend="${#strings.contains(info, '成功')} ? 'text-success' : 'text-danger'"
+                  th:text="${info}"
+                ></p>
+                <form
+                  th:action="@{/reservation/check-in-action}"
+                  method="post"
+                  class="mt-3"
+                >
+                  <input type="hidden" name="_csrf" th:value="${_csrf}" />
+                  <input
+                    type="hidden"
+                    name="reservationId"
+                    th:value="${reservationId}"
+                  />
+                  <div class="mb-3">
+                    <input
+                      type="text"
+                      class="form-control form-control-lg text-center"
+                      id="code"
+                      name="code"
+                      placeholder="请输入4位签到码"
+                      maxlength="4"
+                      pattern="[0-9]{4}"
+                      required
+                      style="letter-spacing: 1rem; font-size: 1.5rem"
+                    />
+                  </div>
+                  <button type="submit" class="btn btn-primary btn-lg w-100">
+                    确认签到
+                  </button>
+                </form>
+                <a
+                  href="/my-reservations"
+                  class="btn btn-outline-secondary mt-3"
+                  >返回我的预约</a
+                >
+              </div>
             </div>
+          </div>
         </div>
-    </section>
-</main>
-<th:block th:replace="~{fragments/common-scripts :: scripts}"></th:block>
-</body>
+      </section>
+    </main>
+    <th:block th:replace="~{fragments/common-scripts :: scripts}"></th:block>
+  </body>
 </html>

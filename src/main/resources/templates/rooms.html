@@ -99,6 +99,7 @@
                       method="post"
                       style="display: inline"
                     >
+                      <input type="hidden" name="_csrf" th:value="${_csrf}" />
                       <button
                         type="submit"
                         class="btn btn-sm btn-outline-danger"
@@ -130,6 +131,7 @@
       <div class="modal-dialog">
         <div class="modal-content">
           <form th:action="@{/room/add}" method="post">
+            <input type="hidden" name="_csrf" th:value="${_csrf}" />
             <div class="modal-header">
               <h5 class="modal-title">新增会议室</h5>
               <button
@@ -187,6 +189,7 @@
       <div class="modal-dialog">
         <div class="modal-content">
           <form th:action="@{/room/update}" method="post">
+            <input type="hidden" name="_csrf" th:value="${_csrf}" />
             <input type="hidden" name="id" id="editRoomId" />
             <div class="modal-header">
               <h5 class="modal-title">编辑会议室</h5>
@@ -247,6 +250,7 @@
       <div class="modal-dialog">
         <div class="modal-content">
           <form th:action="@{/reservation/apply}" method="post">
+            <input type="hidden" name="_csrf" th:value="${_csrf}" />
             <div class="modal-header">
               <h5 class="modal-title">
                 预约会议室：<span id="applyRoomName"></span>

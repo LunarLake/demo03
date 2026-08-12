@@ -1,79 +1,123 @@
-<!DOCTYPE html>
+<!doctype html>
 <html xmlns:th="http://www.thymeleaf.org">
-<head>
-    <th:block th:replace="~{fragments/common-head :: head('预约会议室')}"></th:block>
+  <head>
+    <th:block
+      th:replace="~{fragments/common-head :: head('预约会议室')}"
+    ></th:block>
     <script src="https://cdn.jsdelivr.net/npm/echarts@6.0.0/dist/echarts.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js"></script>
-</head>
-<body class="d-flex">
-<th:block th:replace="~{fragments/sidebar :: sidebar}"></th:block>
-<main class="content-area flex-grow-1">
-    <th:block th:replace="~{fragments/header :: header('预约会议室')}"></th:block>
-    <section class="container-fluid py-4 px-3 px-md-4">
-        <div th:if="${info != null}" class="alert alert-success alert-dismissible fade show" role="alert">
-            <span th:text="${info}"></span>
-            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+  </head>
+  <body class="d-flex">
+    <th:block th:replace="~{fragments/sidebar :: sidebar}"></th:block>
+    <main class="content-area flex-grow-1">
+      <th:block
+        th:replace="~{fragments/header :: header('预约会议室')}"
+      ></th:block>
+      <section class="container-fluid py-4 px-3 px-md-4">
+        <div
+          th:if="${info != null}"
+          class="alert alert-success alert-dismissible fade show"
+          role="alert"
+        >
+          <span th:text="${info}"></span>
+          <button
+            type="button"
+            class="btn-close"
+            data-bs-dismiss="alert"
+          ></button>
         </div>
 
         <div class="card summary-card mb-3">
-            <div class="card-body">
-                <div class="row g-3 align-items-end">
-                    <div class="col-md-4">
-                        <label class="form-label">会议室</label>
-                        <input type="text" class="form-control" th:value="${roomName}" readonly>
-                    </div>
-                    <div class="col-md-3">
-                        <label class="form-label">日期</label>
-                        <input type="date" class="form-control" id="datePicker">
-                    </div>
-                </div>
+          <div class="card-body">
+            <div class="row g-3 align-items-end">
+              <div class="col-md-4">
+                <label class="form-label">会议室</label>
+                <input
+                  type="text"
+                  class="form-control"
+                  th:value="${roomName}"
+                  readonly
+                />
+              </div>
+              <div class="col-md-3">
+                <label class="form-label">日期</label>
+                <input type="date" class="form-control" id="datePicker" />
+              </div>
             </div>
+          </div>
         </div>
 
         <div class="card summary-card mb-3">
-            <div class="card-body">
-                <div id="timelineChart" style="height:200px;"></div>
-            </div>
-            <div class="card-footer text-muted small">
-                <span style="color:#198754">█</span> 空闲可预约 &nbsp;
-                <span style="color:#dc3545">█</span> 教师预约 &nbsp;
-                <span style="color:#fd7e14">█</span> 学生预约 &nbsp;
-                <span style="color:#198754">▣</span> 已选时段 &nbsp;
-                点击绿色区域两次设置起止时间
-            </div>
+          <div class="card-body">
+            <div id="timelineChart" style="height: 200px"></div>
+          </div>
+          <div class="card-footer text-muted small">
+            <span style="color: #198754">█</span> 空闲可预约 &nbsp;
+            <span style="color: #dc3545">█</span> 教师预约 &nbsp;
+            <span style="color: #fd7e14">█</span> 学生预约 &nbsp;
+            <span style="color: #198754">▣</span> 已选时段 &nbsp;
+            点击绿色区域两次设置起止时间
+          </div>
         </div>
 
         <div class="card summary-card">
-            <div class="card-body">
-                <form th:action="@{/reservation/apply}" method="post">
-                    <input type="hidden" name="roomId" th:value="${roomId}">
-                    <div class="row g-3 align-items-end">
-                        <div class="col-md-3">
-                            <label class="form-label">开始时间</label>
-                            <input type="text" class="form-control" id="displayStart" readonly>
-                            <input type="hidden" name="startTime" id="applyStartTime">
-                        </div>
-                        <div class="col-md-3">
-                            <label class="form-label">结束时间</label>
-                            <input type="text" class="form-control" id="displayEnd" readonly>
-                            <input type="hidden" name="endTime" id="applyEndTime">
-                        </div>
-                        <div class="col-md-2">
-                            <label class="form-label">参会人数</label>
-                            <input type="number" class="form-control" name="attendeeCount" value="1" min="1" required>
-                        </div>
-                        <div class="col-md-2">
-                            <button type="submit" class="btn btn-success w-100" id="submitBtn" disabled>提交预约</button>
-                        </div>
-                    </div>
-                </form>
-            </div>
+          <div class="card-body">
+            <form th:action="@{/reservation/apply}" method="post">
+              <input type="hidden" name="_csrf" th:value="${_csrf}" />
+              <input type="hidden" name="roomId" th:value="${roomId}" />
+              <div class="row g-3 align-items-end">
+                <div class="col-md-3">
+                  <label class="form-label">开始时间</label>
+                  <input
+                    type="text"
+                    class="form-control"
+                    id="displayStart"
+                    readonly
+                  />
+                  <input type="hidden" name="startTime" id="applyStartTime" />
+                </div>
+                <div class="col-md-3">
+                  <label class="form-label">结束时间</label>
+                  <input
+                    type="text"
+                    class="form-control"
+                    id="displayEnd"
+                    readonly
+                  />
+                  <input type="hidden" name="endTime" id="applyEndTime" />
+                </div>
+                <div class="col-md-2">
+                  <label class="form-label">参会人数</label>
+                  <input
+                    type="number"
+                    class="form-control"
+                    name="attendeeCount"
+                    value="1"
+                    min="1"
+                    required
+                  />
+                </div>
+                <div class="col-md-2">
+                  <button
+                    type="submit"
+                    class="btn btn-success w-100"
+                    id="submitBtn"
+                    disabled
+                  >
+                    提交预约
+                  </button>
+                </div>
+              </div>
+            </form>
+          </div>
         </div>
-    </section>
-</main>
-<th:block th:replace="~{fragments/common-scripts :: scripts}"></th:block>
+      </section>
+    </main>
+    <th:block th:replace="~{fragments/common-scripts :: scripts}"></th:block>
 
-<script th:inline="javascript">var currentUserRole = /*[[${session.role}]]*/ '';</script>
-<script src="/js/reservation-new.js"></script>
-</body>
+    <script th:inline="javascript">
+      var currentUserRole = /*[[${session.role}]]*/ "";
+    </script>
+    <script src="/js/reservation-new.js"></script>
+  </body>
 </html>

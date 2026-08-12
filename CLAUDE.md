@@ -87,6 +87,7 @@ controller → service (interface) → service/impl → mapper (MyBatis-Plus Bas
 - **RoleInterceptor** — checks `session.username != null`, redirects to `/login`.
 - **LogInterceptor** — records every request to `t_log` with username (or "匿名"), IP, URL, timestamp. Writes asynchronously via `LogService.saveAsync()`.
 - **AdminInterceptor** — checks `session.role == "ADMIN"`, redirects to `/` if not. Covers `/room/add`, `/room/update`, `/room/delete/**`, `/reservation/approve`, `/reservation/approve-list`, `/reservation/reject`, `/reservation/detail/**`, `/admin/**`, `/api/report-*` (room management + approval management + dashboard + logs).
+- **CsrfInterceptor** — Synchronizer Token: every session holds a `_csrf` token (exposed as request attribute `_csrf` for templates). All POST requests must carry it via form param `_csrf` or header `X-CSRF-TOKEN`, otherwise redirected to `/`. Registered for `/**` minus static resources (covers login/register forms too). Session cookie uses `SameSite=Lax` (application.yml) as second layer.
 - **Excluded paths** (RoleInterceptor + LogInterceptor): `/verityImg`, `/error`, `/css/**`, `/js/**`, `/images/**`, `/**/*.{css,js,jpg,png,gif,ico}`
 - **RoleInterceptor additional excludes**: `/login`, `/loginAction`, `/register`, `/registerAction`
 - **AdminInterceptor** uses `addPathPatterns` only (no excludes needed).

@@ -11,6 +11,7 @@ public class WebConfig implements WebMvcConfigurer {
 
     private final RoleInterceptor roleInterceptor;
     private final LogInterceptor logInterceptor;
+    private final CsrfInterceptor csrfInterceptor;
     private final AdminInterceptor adminInterceptor;
     // 注册拦截器，设置拦截路径和排除路径
     @Override
@@ -26,6 +27,15 @@ public class WebConfig implements WebMvcConfigurer {
                 );
 
         registry.addInterceptor(logInterceptor)
+                .addPathPatterns("/**")
+                .excludePathPatterns(
+                        "/verityImg", "/error",
+                        "/css/**", "/js/**", "/images/**",
+                        "/**/*.css", "/**/*.js", "/**/*.jpg", "/**/*.png", "/**/*.gif", "/**/*.ico"
+                );
+
+        // CSRF 防护：全部路径（含登录/注册匿名表单），排除静态资源
+        registry.addInterceptor(csrfInterceptor)
                 .addPathPatterns("/**")
                 .excludePathPatterns(
                         "/verityImg", "/error",

@@ -1,58 +1,101 @@
-<!DOCTYPE html>
+<!doctype html>
 <html xmlns:th="http://www.thymeleaf.org">
-<head>
-    <th:block th:replace="~{fragments/common-head :: head('审批管理')}"></th:block>
-</head>
-<body class="d-flex">
-<th:block th:replace="~{fragments/sidebar :: sidebar}"></th:block>
-<main class="content-area flex-grow-1">
-    <th:block th:replace="~{fragments/header :: header('审批管理')}"></th:block>
-    <section class="container-fluid py-4 px-3 px-md-4">
-        <div th:if="${info != null}" class="alert alert-info alert-dismissible fade show" role="alert">
-            <span th:text="${info}"></span>
-            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+  <head>
+    <th:block
+      th:replace="~{fragments/common-head :: head('审批管理')}"
+    ></th:block>
+  </head>
+  <body class="d-flex">
+    <th:block th:replace="~{fragments/sidebar :: sidebar}"></th:block>
+    <main class="content-area flex-grow-1">
+      <th:block
+        th:replace="~{fragments/header :: header('审批管理')}"
+      ></th:block>
+      <section class="container-fluid py-4 px-3 px-md-4">
+        <div
+          th:if="${info != null}"
+          class="alert alert-info alert-dismissible fade show"
+          role="alert"
+        >
+          <span th:text="${info}"></span>
+          <button
+            type="button"
+            class="btn-close"
+            data-bs-dismiss="alert"
+          ></button>
         </div>
         <div class="card summary-card">
-            <div class="card-header bg-white border-0">
-                <h2 class="h5 mb-0">待审批预约</h2>
-            </div>
-            <div class="card-body">
-                <table class="table table-hover" th:if="${!#lists.isEmpty(approvals)}">
-                    <thead>
-                        <tr>
-                            <th>申请人</th>
-                            <th>会议室</th>
-                            <th>开始时间</th>
-                            <th>结束时间</th>
-                            <th>操作</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        <tr th:each="a : ${approvals}">
-                            <td><a th:href="@{/reservation/detail/{id}(id=${a.id})}" th:text="${a.userName}"></a></td>
-                            <td th:text="${a.roomName}"></td>
-                            <td th:text="${#strings.substring(a['start_time'].toString(), 0, 16)}"></td>
-                            <td th:text="${#strings.substring(a['end_time'].toString(), 0, 16)}"></td>
-                            <td>
-                                <div class="d-flex gap-2">
-                                    <form th:action="@{/reservation/approve}" method="post" style="display:inline">
-                                        <input type="hidden" name="id" th:value="${a.id}">
-                                        <button type="submit" class="btn btn-sm btn-success">批准</button>
-                                    </form>
-                                    <form th:action="@{/reservation/reject}" method="post" style="display:inline">
-                                        <input type="hidden" name="id" th:value="${a.id}">
-                                        <button type="submit" class="btn btn-sm btn-danger">拒绝</button>
-                                    </form>
-                                </div>
-                            </td>
-                        </tr>
-                    </tbody>
-                </table>
-                <p th:if="${#lists.isEmpty(approvals)}" class="text-center text-muted py-4">暂无待审批预约</p>
-            </div>
+          <div class="card-header bg-white border-0">
+            <h2 class="h5 mb-0">待审批预约</h2>
+          </div>
+          <div class="card-body">
+            <table
+              class="table table-hover"
+              th:if="${!#lists.isEmpty(approvals)}"
+            >
+              <thead>
+                <tr>
+                  <th>申请人</th>
+                  <th>会议室</th>
+                  <th>开始时间</th>
+                  <th>结束时间</th>
+                  <th>操作</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr th:each="a : ${approvals}">
+                  <td>
+                    <a
+                      th:href="@{/reservation/detail/{id}(id=${a.id})}"
+                      th:text="${a.userName}"
+                    ></a>
+                  </td>
+                  <td th:text="${a.roomName}"></td>
+                  <td
+                    th:text="${#strings.substring(a['start_time'].toString(), 0, 16)}"
+                  ></td>
+                  <td
+                    th:text="${#strings.substring(a['end_time'].toString(), 0, 16)}"
+                  ></td>
+                  <td>
+                    <div class="d-flex gap-2">
+                      <form
+                        th:action="@{/reservation/approve}"
+                        method="post"
+                        style="display: inline"
+                      >
+                        <input type="hidden" name="_csrf" th:value="${_csrf}" />
+                        <input type="hidden" name="id" th:value="${a.id}" />
+                        <button type="submit" class="btn btn-sm btn-success">
+                          批准
+                        </button>
+                      </form>
+                      <form
+                        th:action="@{/reservation/reject}"
+                        method="post"
+                        style="display: inline"
+                      >
+                        <input type="hidden" name="_csrf" th:value="${_csrf}" />
+                        <input type="hidden" name="id" th:value="${a.id}" />
+                        <button type="submit" class="btn btn-sm btn-danger">
+                          拒绝
+                        </button>
+                      </form>
+                    </div>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+            <p
+              th:if="${#lists.isEmpty(approvals)}"
+              class="text-center text-muted py-4"
+            >
+              暂无待审批预约
+            </p>
+          </div>
         </div>
-    </section>
-</main>
-<th:block th:replace="~{fragments/common-scripts :: scripts}"></th:block>
-</body>
+      </section>
+    </main>
+    <th:block th:replace="~{fragments/common-scripts :: scripts}"></th:block>
+  </body>
 </html>
