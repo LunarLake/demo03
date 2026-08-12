@@ -48,7 +48,7 @@
 
 系统采用经典三层B/S架构，遵循MVC设计模式：
 
-- **表现层（View）**：基于Thymeleaf模板引擎进行服务端渲染，配合Bootstrap 5响应式布局和ECharts 5数据可视化图表。
+- **表现层（View）**：基于Thymeleaf模板引擎进行服务端渲染，配合Bootstrap 5响应式布局和ECharts 6数据可视化图表。
 - **控制层（Controller）**：Spring MVC控制器负责路由分发、参数绑定与校验（JSR-380）、Session会话管理以及视图跳转。
 - **业务逻辑层（Service）**：Service接口定义业务契约，实现类承载核心业务逻辑（密码哈希、冲突检测、审批流转、签到核销等），利用Spring事务管理保证数据一致性。
 - **数据访问层（Mapper）**：基于MyBatis-Plus的BaseMapper接口，通过注解编写自定义SQL，零XML配置。
@@ -56,15 +56,15 @@
 
 **技术选型：**
 
-- 后端框架：Spring Boot
-- 模板引擎：Thymeleaf
-- ORM框架：MyBatis-Plus
-- 数据库：MySQL 8.0
-- 连接池：HikariCP
-- 安全方案：Session过滤器 + 强哈希（轻量级鉴权）
-- 前端组件：ECharts 5.x、Bootstrap 5
-- 构建工具：Apache Maven
-- 日程调度：Spring @Scheduled定时任务 + @Async异步线程池
+- 后端框架：Spring Boot 3.5（Java 17）
+- 模板引擎：Thymeleaf（服务端渲染）
+- ORM框架：MyBatis-Plus 3.5（BaseMapper + 注解 SQL，零 XML）
+- 数据库：MySQL 8.0（HikariCP 连接池）
+- 安全方案：Session 认证 + 拦截器鉴权 + BCrypt 密码哈希 + CSRF Token + 登录限流（轻量级，不引入 Spring Security）
+- 前端组件：ECharts 6、Bootstrap 5、bootstrap-icons（全部本地化，无 CDN 依赖）
+- 构建工具：Apache Maven（mvnw 包装器）
+- 日程调度：Spring @Scheduled 定时任务 + @Async 异步线程池
+- 测试：JUnit 5 + Mockito + JaCoCo（行覆盖率 86%+）
 
 ### 3.2 功能模块设计
 
@@ -121,11 +121,12 @@
 - 首页看板：统计卡片 + 快速入口。
 - 会议室列表页：ECharts柱状图 + 卡片网格，维护状态灰色按钮。
 - 可视化预约时间轴页：自定义甘特图，角色颜色区分，冲突时按钮变色提示。
-- 我的预约页：表格展示全部预约及操作按钮。
-- 审批列表页：管理员专属，待审批预约列表。
+- 我的预约页：状态 Tab 筛选（全部/待审批/已通过/已结束）+ 分页表格，含取消/签到操作与拒绝原因展示。
+- 审批列表页：管理员专属，含确认弹窗、拒绝原因输入、人数/容量对照。
 - 签到页面：输入4位签到码，校验时间窗口。
-- 管理看板：管理员专属，ECharts多图表联动。
-- 系统日志：管理员专属，分页展示访问日志。
+- 个人中心页：修改姓名/邮箱、修改密码（原密码校验 + 二次确认）。
+- 管理看板：管理员专属，ECharts多图表联动，加载失败有重试提示。
+- 系统日志：管理员专属，分页展示访问日志，支持用户名/URL 筛选。
 
 ## 4. 系统实现与部署
 
@@ -140,80 +141,92 @@
 - 操作系统：Windows/Linux
 - 浏览器：现代主流浏览器（Chrome/Edge）
 
-### 4.2 项目结构与说明
+### 4.2 快速开始
+
+1. **准备数据库**：创建 `db02` 数据库，并按 3.3 节的表设计建立 5 张表
+2. **配置连接**：复制 `src/main/resources/application-local.yml.example` 为 `application-local.yml`，填写数据库密码（或用环境变量 `DB_USERNAME` / `DB_PASSWORD`，可选的 `DB_HOST` / `DB_PORT` / `DB_NAME`）
+3. **初始化账号**：执行 `mysql -u root -p db02 < sql/init-admin.sql`，创建管理员（`admin` / `admin123`）与教师（`teacher` / `teacher123`）账号；普通学生直接通过注册页注册
+4. **启动项目**：`.\mvnw spring-boot:run`，访问 http://localhost:8080
+5. **运行测试**：`.\mvnw test`（107 个测试，JaCoCo 报告在 `target/site/jacoco/index.html`）
+
+> 密码安全提示：`sql/init-admin.sql` 中的默认密码仅用于本地开发，部署前请更换随机强密码（哈希生成方法见脚本注释）。数据库连接信息勿提交仓库。
+
+### 4.3 项目结构与说明
 
 ```
-meeting-room-system/
+demo03/
 ├── pom.xml
-├── mvnw / mvnw.cmd
+├── mvnw / mvnw.cmd                          # Maven 包装器（免装 Maven）
+├── sql/
+│   ├── init-admin.sql                       # 管理员/教师账号初始化（BCrypt 哈希）
+│   └── migration-reject-reason.sql          # 审批拒绝原因列迁移脚本
+├── CLAUDE.md                                # 面向 AI 助手的项目说明
 └── src/
     ├── main/
-    │   ├── java/com/example/meetingroom/
-    │   │   ├── MeetingRoomApplication.java
-    │   │   ├── common/                     # 拦截器与配置
-    │   │   ├── controller/                 # 控制器层
-    │   │   ├── entity/                     # 实体类（5个）
-    │   │   ├── mapper/                     # MyBatis-Plus数据访问
-    │   │   ├── service/                    # 业务接口
-    │   │   ├── service/impl/               # 业务实现
-    │   │   └── task/                       # 定时任务
+    │   ├── java/com/wyc/demo03/
+    │   │   ├── Demo03Application.java       # 启动类（@EnableScheduling + @EnableAsync）
+    │   │   ├── common/                      # 拦截器与全局配置
+    │   │   │   ├── RoleInterceptor          #   登录态检查
+    │   │   │   ├── AdminInterceptor         #   管理员权限（会议室/审批/控制台/日志）
+    │   │   │   ├── CsrfInterceptor          #   CSRF Token 校验
+    │   │   │   ├── LogInterceptor           #   访问日志异步记录
+    │   │   │   ├── GlobalExceptionHandler   #   全局异常（API 错误信封/页面重定向）
+    │   │   │   ├── ApiResponse              #   API 统一响应信封
+    │   │   │   ├── RoleConstant             #   角色常量与文案映射
+    │   │   │   ├── MybatisPlusConfig        #   分页插件注册
+    │   │   │   └── WebConfig                #   拦截器路径注册
+    │   │   ├── controller/                  # 控制器层（Main/Room/Reservation/Log/Profile）
+    │   │   ├── entity/                      # 实体类（User/MeetingRoom/Reservation/AttendanceRecord/Log）
+    │   │   ├── mapper/                      # MyBatis-Plus 数据访问（@Select 注解 SQL）
+    │   │   ├── service/                     # 业务接口
+    │   │   ├── service/impl/                # 业务实现（@Transactional 事务）
+    │   │   └── task/                        # 定时任务（超时预约释放、日志清理）
     │   └── resources/
-    │       ├── application.properties
-    │       ├── static/js/
-    │       └── templates/                  # Thymeleaf模板
-    └── test/
+    │       ├── application.yml              # 主配置（profile 默认 local）
+    │       ├── static/
+    │       │   ├── js/                      # 甘特图等页面脚本
+    │       │   └── vendor/                  # 本地化前端依赖（Bootstrap/ECharts/Axios）
+    │       └── templates/                   # Thymeleaf 模板（fragments/ 为公共组件）
+    └── test/java/com/wyc/demo03/            # 单元测试（107 例，JaCoCo 覆盖率 86%+）
 ```
 
 各包职责说明：
 
-- `common/` — 拦截器与Web配置，处理登录、权限、日志拦截。
-- `controller/` — Spring MVC控制器，路由映射、参数校验、Session管理。
-- `entity/` — 实体类，使用Lombok及MyBatis-Plus注解。
-- `mapper/` — 数据访问层，继承BaseMapper，自定义SQL使用注解。
+- `common/` — 拦截器与全局配置：登录认证、角色鉴权、CSRF 防护、访问日志、统一异常处理、分页插件。
+- `controller/` — Spring MVC 控制器，路由映射、参数校验、Session 管理、重定向与闪现消息。
+- `entity/` — 实体类，Lombok `@Data` + MyBatis-Plus `@TableName`，JSR-380 校验注解。
+- `mapper/` — 数据访问层，继承 `BaseMapper`，自定义 SQL 用 `@Select` 注解（联表查询、冲突检测等）。
 - `service/` — 业务接口，定义核心业务契约。
-- `service/impl/` — 业务实现，使用`@Transactional`保证事务。
-- `task/` — 定时任务，配合`@Async`异步释放超时预约。
-- `templates/` — Thymeleaf模板，`fragments/`存放公共组件。
-
-### 4.3 遇到的难点与解决方案
-
-#### 难点一：ECharts甘特图时间轴的自定义渲染与交互
-
-**解决方案**：采用ECharts自定义系列（custom series），手动计算像素位置；通过画布点击事件反向计算时间戳，实现点选交互；将JS代码外置，避免模板引擎误解析。
-
-#### 难点二：高优先级覆盖预约的并发安全
-
-**解决方案**：使用`@Transactional`包装整个覆盖操作为数据库事务，利用InnoDB行锁保证原子性；冲突检测阶段区分角色，仅当冲突全部为低优先级时允许覆盖。
-
-#### 难点三：签到时间窗口的精准校验与防重签
-
-**解决方案**：采用`LocalDateTime`精确比较时间窗口边界；签到操作使用悲观锁（SELECT FOR UPDATE）双重检测，确保同一预约只能签到一次；签到码使用`SecureRandom`生成。
-
-#### 难点四：Thymeleaf模板引擎与JavaScript的兼容性处理
-
-**解决方案**：将复杂JS代码外置至`static/js/`目录，完全规避Thymeleaf解析；需要内联的少量变量使用`th:inline="javascript"`及安全语法注入。
+- `service/impl/` — 业务实现：密码哈希、冲突检测与教师覆盖、审批流转、签到核销、定时任务逻辑，关键操作用 `@Transactional` 保证原子性。
+- `task/` — 定时任务：`ReservationScheduler` 每 60 秒释放超时未签到预约；`LogCleanupScheduler` 每天凌晨 3 点清理 30 天前日志。
+- `templates/` — Thymeleaf 模板，`fragments/` 存放侧边栏、顶栏、公共脚本等组件。
+- `sql/` — 数据库初始化与迁移脚本。
 
 ## 5. 总结
 
 ### 已完成功能
 
-- 用户登录/注册（验证码 + 密码哈希）
-- 三角色权限认证（学生/教师/管理员，Session + 拦截器）
-- 会议室管理（CRUD + 维护状态切换）
-- ECharts可视化甘特图时间轴预约（角色区分着色 + 优先级覆盖）
-- 分时预约与冲突检测（15分钟粒度，事务保证）
-- 审批管理（批准生成签到码/拒绝）
-- 时间窗口签到（开始前10分钟~开始后15分钟）
-- 定时任务超时释放无效预约
-- 首页统计看板 + 管理数据看板
-- 系统访问日志（异步记录）
-- 越权防御（前后端双重防线）
-- 数据校验 + 全局异常处理
+- 三角色权限认证（学生/教师/管理员职责分离，Session + 拦截器；注册强制学生，教师/管理员由 SQL 初始化）
+- 用户登录/注册（图形验证码 + BCrypt 密码哈希 + 存量明文密码登录即迁移）
+- 安全防护：CSRF Token + SameSite Cookie、登录失败限流（5 次锁 15 分钟）、签到码防枚举（5 次锁定）、注册验证码
+- 会议室管理（CRUD + 维护状态切换 + 删除前活跃预约守卫）
+- ECharts 可视化甘特图时间轴预约（角色区分着色 + 教师覆盖学生 + 冲突变色提示）
+- 审批管理（确认弹窗 + 拒绝原因展示 + 人数/容量对照）
+- 时间窗口签到（开始前10分钟~开始后15分钟）+ 定时任务超时释放无效预约
+- 个人中心（修改密码/更新资料，session 即时同步）
+- 我的预约状态筛选（全部/待审批/已通过/已结束）与分页
+- 首页统计看板 + 管理数据大屏（使用率/繁忙时段/出勤率）
+- 系统访问日志（异步记录 + 分页筛选 + 30 天定期清理）
+- API 统一响应信封（success/data/message）+ 全局异常处理
+- 前端静态资源本地化（内网无 CDN 依赖，加载失败有兜底提示）
+- 自动化测试 107 例（JaCoCo 行覆盖率 86%+）
 
 ### 可改进方向
 
+- 周期性预约（每周例会一键重复）
+- 预约增加会议主题/用途字段
+- 扫码签到（物理屏投二维码）
 - 邮件/短信状态通知
-- 会议室图片上传
+- Docker 化部署
 - 移动端适配
-- 单元测试覆盖率提升
-- 第三方登录集成（OAuth 2.0）
+- 密码找回流程
