@@ -491,12 +491,14 @@ public class ReservationServiceImpl extends ServiceImpl<ReservationMapper, Reser
     }
 
     /**
-     * 查询当前用户的预约列表（联表查会议室名称 + 签到状态）
-     * 用于"我的预约"页面
+     * 分页查询当前用户的预约列表（联表查会议室名称 + 签到状态）
+     * 用于"我的预约"页面（status：null=全部，0=待审批，1=已通过，2=已结束）
      */
     @Override
-    public List<Map<String, Object>> findByUserIdWithRoom(Long userId) {
-        return baseMapper.findByUserIdWithRoom(userId);
+    public com.baomidou.mybatisplus.core.metadata.IPage<Map<String, Object>> findByUserIdWithRoomPage(
+            com.baomidou.mybatisplus.extension.plugins.pagination.Page<?> page,
+            Long userId, Integer status) {
+        return baseMapper.findByUserIdWithRoomPage(page, userId, status);
     }
 
     /**

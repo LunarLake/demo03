@@ -105,16 +105,22 @@ public class ReservationController {
     }
 
     // ====================================================================
-    // GET /my-reservations —— 我的预约列表
+    // GET /my-reservations —— 我的预约列表（状态 Tab + 分页）
     // ====================================================================
-    // 从 session 取当前用户 ID，查询该用户的所有预约（联表查会议室名称 + 签到状态）。
+    // 从 session 取当前用户 ID，分页查询该用户的预约（联表查会议室名称 + 签到状态）。
+    // status 参数：null=全部，0=待审批，1=已通过，2=已结束（含已拒绝/被覆盖/已取消/超时释放）。
     //
     // 路由不受角色拦截器拦截 → 所有登录用户都能访问。
     @GetMapping("/my-reservations")
-    public String myReservations(Model model, HttpSession session) {
+    public String myReservations(@RequestParam(defaultValue = "1") int page,
+                                 @RequestParam(defaultValue = "10") int size,
+                                 @RequestParam(required = false) Integer status,
+                                 Model model, HttpSession session) {
         Long userId = (Long) session.getAttribute("Id");
-        // findByUserIdWithRoom：JOIN t_meeting_room + LEFT JOIN t_attendance_record
-        model.addAttribute("reservations", reservationService.findByUserIdWithRoom(userId));
+        // findByUserIdWithRoomPage：JOIN t_meeting_room + LEFT JOIN t_attendance_record，分页插件自动 LIMIT
+        model.addAttribute("reservationPage", reservationService.findByUserIdWithRoomPage(
+                new com.baomidou.mybatisplus.extension.plugins.pagination.Page<>(page, size), userId, status));
+        model.addAttribute("status", status);
         return "my-reservations";
     }
 

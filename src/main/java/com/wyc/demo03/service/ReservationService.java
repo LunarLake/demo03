@@ -1,5 +1,7 @@
 package com.wyc.demo03.service;
 
+import com.baomidou.mybatisplus.core.metadata.IPage;
+import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.baomidou.mybatisplus.extension.service.IService;
 import com.wyc.demo03.entity.Reservation;
 import jakarta.servlet.http.HttpSession;
@@ -24,8 +26,8 @@ public interface ReservationService extends IService<Reservation> {
     List<Map<String, Object>> countByRoom();
     // 按小时统计预约数量
     List<Map<String, Object>> countByHour();
-    // 根据用户ID查询预约及房间信息
-    List<Map<String, Object>> findByUserIdWithRoom(Long userId);
+    // 根据用户ID分页查询预约及房间信息（status：null=全部，0=待审批，1=已通过，2=已结束）
+    IPage<Map<String, Object>> findByUserIdWithRoomPage(Page<?> page, Long userId, Integer status);
     // 根据预约ID查询详细信息
     Map<String, Object> findDetailById(Long id);
     // 根据房间ID和日期查询预约安排

@@ -20,9 +20,45 @@
             <a href="/rooms" class="btn btn-primary btn-sm">新增预约</a>
           </div>
           <div class="card-body">
+            <!-- 状态筛选 Tab -->
+            <ul class="nav nav-pills mb-3">
+              <li class="nav-item">
+                <a
+                  class="nav-link"
+                  th:classappend="${status == null} ? 'active'"
+                  th:href="@{/my-reservations}"
+                  >全部</a
+                >
+              </li>
+              <li class="nav-item">
+                <a
+                  class="nav-link"
+                  th:classappend="${status != null and status == 0} ? 'active'"
+                  th:href="@{/my-reservations(status=0)}"
+                  >待审批</a
+                >
+              </li>
+              <li class="nav-item">
+                <a
+                  class="nav-link"
+                  th:classappend="${status != null and status == 1} ? 'active'"
+                  th:href="@{/my-reservations(status=1)}"
+                  >已通过</a
+                >
+              </li>
+              <li class="nav-item">
+                <a
+                  class="nav-link"
+                  th:classappend="${status != null and status == 2} ? 'active'"
+                  th:href="@{/my-reservations(status=2)}"
+                  >已结束</a
+                >
+              </li>
+            </ul>
+
             <table
               class="table table-hover"
-              th:if="${!#lists.isEmpty(reservations)}"
+              th:if="${!#lists.isEmpty(reservationPage.records)}"
             >
               <thead>
                 <tr>
@@ -37,16 +73,16 @@
                 </tr>
               </thead>
               <tbody>
-                <tr th:each="r : ${reservations}">
+                <tr th:each="r : ${reservationPage.records}">
                   <td th:text="${r.roomName}"></td>
                   <td
                     th:text="${r['attendee_count'] != null ? r['attendee_count'] : '-'}"
                   ></td>
                   <td
-                    th:text="${#strings.substring(r['start_time'].toString(), 0, 16)}"
+                    th:text="${#temporals.format(r['start_time'], 'yyyy-MM-dd HH:mm')}"
                   ></td>
                   <td
-                    th:text="${#strings.substring(r['end_time'].toString(), 0, 16)}"
+                    th:text="${#temporals.format(r['end_time'], 'yyyy-MM-dd HH:mm')}"
                   ></td>
                   <td>
                     <span
@@ -64,11 +100,6 @@
                       class="badge bg-danger"
                       >已拒绝</span
                     >
-                    <div
-                      th:if="${r['reservation_status'] == 2 and r['reject_reason'] != null}"
-                      class="small text-muted mt-1"
-                      th:text="'原因：' + ${r['reject_reason']}"
-                    ></div>
                     <span
                       th:if="${r['reservation_status'] == 3}"
                       class="badge bg-secondary"
@@ -84,6 +115,11 @@
                       class="badge bg-secondary"
                       >超时释放</span
                     >
+                    <div
+                      th:if="${r['reservation_status'] == 2 and r['reject_reason'] != null}"
+                      class="small text-muted mt-1"
+                      th:text="'原因：' + ${r['reject_reason']}"
+                    ></div>
                   </td>
                   <td>
                     <span
@@ -100,7 +136,7 @@
                     >
                     <span
                       th:if="${r['reservation_status'] == 1 and (r['attend_status'] == null or r['attend_status'] == 0)}"
-                      th:with="now=${#temporals.format(#temporals.createNow(), 'yyyy-MM-dd HH:mm')}, end=${#strings.substring(r['end_time'].toString(), 0, 16)}"
+                      th:with="now=${#temporals.format(#temporals.createNow(), 'yyyy-MM-dd HH:mm')}, end=${#temporals.format(r['end_time'], 'yyyy-MM-dd HH:mm')}"
                       class="badge"
                       th:classappend="${now > end} ? 'bg-danger' : 'bg-secondary'"
                       th:text="${now > end} ? '缺席' : '未签到'"
@@ -134,11 +170,43 @@
               </tbody>
             </table>
             <p
-              th:if="${#lists.isEmpty(reservations)}"
+              th:if="${#lists.isEmpty(reservationPage.records)}"
               class="text-center text-muted py-4"
             >
               暂无预约记录
             </p>
+
+            <!-- 分页控件 -->
+            <nav th:if="${reservationPage.pages > 1}" aria-label="预约分页">
+              <ul class="pagination pagination-sm justify-content-center mb-0">
+                <li
+                  class="page-item"
+                  th:classappend="${reservationPage.current <= 1} ? 'disabled'"
+                >
+                  <a
+                    class="page-link"
+                    th:href="@{/my-reservations(page=${reservationPage.current - 1}, status=${status})}"
+                    >上一页</a
+                  >
+                </li>
+                <li class="page-item disabled">
+                  <span
+                    class="page-link"
+                    th:text="|第 ${reservationPage.current} / ${reservationPage.pages} 页（共 ${reservationPage.total} 条）|"
+                  ></span>
+                </li>
+                <li
+                  class="page-item"
+                  th:classappend="${reservationPage.current >= reservationPage.pages} ? 'disabled'"
+                >
+                  <a
+                    class="page-link"
+                    th:href="@{/my-reservations(page=${reservationPage.current + 1}, status=${status})}"
+                    >下一页</a
+                  >
+                </li>
+              </ul>
+            </nav>
           </div>
         </div>
       </section>

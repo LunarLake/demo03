@@ -245,10 +245,15 @@ class ControllerLayerTest {
     }
 
     @Test
-    void myReservationsRenders() throws Exception {
+    void myReservationsRendersWithPagination() throws Exception {
+        // Arrange
         MockHttpSession session = new MockHttpSession();
         session.setAttribute("Id", 1L);
+        when(reservationService.findByUserIdWithRoomPage(
+                org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any()))
+                .thenReturn(new com.baomidou.mybatisplus.extension.plugins.pagination.Page<>(1, 10));
 
+        // Act & Assert
         mockMvc.perform(get("/my-reservations").session(session))
                 .andExpect(status().isOk())
                 .andExpect(view().name("my-reservations"));
