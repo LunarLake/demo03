@@ -168,4 +168,17 @@ class MeetingRoomAndLogServiceTest {
         assertEquals(0, logService.countTop6ByUsername().size());
         assertEquals(1, logService.countByDay().size());
     }
+
+    @Test
+    void deleteBeforeDelegatesToBaseMapperWithCutoff() {
+        // Arrange
+        when(logMapper.delete(any())).thenReturn(42);
+
+        // Act
+        int deleted = logService.deleteBefore(java.time.LocalDateTime.now().minusDays(30));
+
+        // Assert
+        assertEquals(42, deleted);
+        verify(logMapper).delete(any());
+    }
 }

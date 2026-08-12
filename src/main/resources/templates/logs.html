@@ -1,43 +1,121 @@
-<!DOCTYPE html>
+<!doctype html>
 <html xmlns:th="http://www.thymeleaf.org">
-<head>
-    <th:block th:replace="~{fragments/common-head :: head('系统日志')}"></th:block>
-</head>
-<body class="d-flex">
-<th:block th:replace="~{fragments/sidebar :: sidebar}"></th:block>
-<main class="content-area flex-grow-1">
-    <th:block th:replace="~{fragments/header :: header('系统日志')}"></th:block>
-    <section class="container-fluid py-4 px-3 px-md-4">
+  <head>
+    <th:block
+      th:replace="~{fragments/common-head :: head('系统日志')}"
+    ></th:block>
+  </head>
+  <body class="d-flex">
+    <th:block th:replace="~{fragments/sidebar :: sidebar}"></th:block>
+    <main class="content-area flex-grow-1">
+      <th:block
+        th:replace="~{fragments/header :: header('系统日志')}"
+      ></th:block>
+      <section class="container-fluid py-4 px-3 px-md-4">
         <div class="card summary-card">
-            <div class="card-header bg-white border-0">
-                <h2 class="h5 mb-0">访问日志列表</h2>
-            </div>
-            <div class="card-body">
-                <table class="table table-hover table-sm" th:if="${!#lists.isEmpty(logList)}">
-                    <thead>
-                        <tr>
-                            <th>ID</th>
-                            <th>用户名</th>
-                            <th>访问URL</th>
-                            <th>IP地址</th>
-                            <th>时间</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        <tr th:each="log : ${logList}">
-                            <td th:text="${log.id}"></td>
-                            <td th:text="${log.username}"></td>
-                            <td th:text="${log.url}"></td>
-                            <td th:text="${log.ip}"></td>
-                            <td th:text="${#temporals.format(log.timestamp, 'yyyy-MM-dd HH:mm:ss')}"></td>
-                        </tr>
-                    </tbody>
-                </table>
-                <p th:if="${#lists.isEmpty(logList)}" class="text-center text-muted py-4">暂无日志记录</p>
-            </div>
+          <div class="card-header bg-white border-0">
+            <h2 class="h5 mb-0">访问日志列表</h2>
+          </div>
+          <div class="card-body">
+            <!-- 筛选表单 -->
+            <form class="row g-2 mb-3" th:action="@{/admin/logs}" method="get">
+              <div class="col-auto">
+                <input
+                  type="text"
+                  class="form-control form-control-sm"
+                  name="username"
+                  placeholder="按用户名筛选"
+                  th:value="${username}"
+                />
+              </div>
+              <div class="col-auto">
+                <input
+                  type="text"
+                  class="form-control form-control-sm"
+                  name="url"
+                  placeholder="按 URL 筛选"
+                  th:value="${url}"
+                />
+              </div>
+              <div class="col-auto">
+                <button type="submit" class="btn btn-sm btn-primary">
+                  筛选
+                </button>
+                <a
+                  class="btn btn-sm btn-outline-secondary"
+                  th:href="@{/admin/logs}"
+                  >重置</a
+                >
+              </div>
+            </form>
+
+            <table
+              class="table table-hover table-sm"
+              th:if="${!#lists.isEmpty(logPage.records)}"
+            >
+              <thead>
+                <tr>
+                  <th>ID</th>
+                  <th>用户名</th>
+                  <th>访问URL</th>
+                  <th>IP地址</th>
+                  <th>时间</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr th:each="log : ${logPage.records}">
+                  <td th:text="${log.id}"></td>
+                  <td th:text="${log.username}"></td>
+                  <td th:text="${log.url}"></td>
+                  <td th:text="${log.ip}"></td>
+                  <td
+                    th:text="${#temporals.format(log.timestamp, 'yyyy-MM-dd HH:mm:ss')}"
+                  ></td>
+                </tr>
+              </tbody>
+            </table>
+            <p
+              th:if="${#lists.isEmpty(logPage.records)}"
+              class="text-center text-muted py-4"
+            >
+              暂无日志记录
+            </p>
+
+            <!-- 分页控件 -->
+            <nav th:if="${logPage.pages > 1}" aria-label="日志分页">
+              <ul class="pagination pagination-sm justify-content-center mb-0">
+                <li
+                  class="page-item"
+                  th:classappend="${logPage.current <= 1} ? 'disabled'"
+                >
+                  <a
+                    class="page-link"
+                    th:href="@{/admin/logs(page=${logPage.current - 1}, username=${username}, url=${url})}"
+                    >上一页</a
+                  >
+                </li>
+                <li class="page-item disabled">
+                  <span
+                    class="page-link"
+                    th:text="|第 ${logPage.current} / ${logPage.pages} 页（共 ${logPage.total} 条）|"
+                  ></span>
+                </li>
+                <li
+                  class="page-item"
+                  th:classappend="${logPage.current >= logPage.pages} ? 'disabled'"
+                >
+                  <a
+                    class="page-link"
+                    th:href="@{/admin/logs(page=${logPage.current + 1}, username=${username}, url=${url})}"
+                    >下一页</a
+                  >
+                </li>
+              </ul>
+            </nav>
+          </div>
         </div>
-    </section>
-</main>
-<th:block th:replace="~{fragments/common-scripts :: scripts}"></th:block>
-</body>
+      </section>
+    </main>
+    <th:block th:replace="~{fragments/common-scripts :: scripts}"></th:block>
+  </body>
 </html>

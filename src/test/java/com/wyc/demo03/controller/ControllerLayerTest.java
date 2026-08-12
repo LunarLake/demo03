@@ -390,7 +390,24 @@ class ControllerLayerTest {
     }
 
     @Test
-    void logsPageRenders() throws Exception {
+    void logsPageRendersWithPagination() throws Exception {
+        // Arrange：分页查询链返回空页
+        com.wyc.demo03.service.LogService logService = org.mockito.Mockito.mock(com.wyc.demo03.service.LogService.class);
+        com.baomidou.mybatisplus.extension.conditions.query.LambdaQueryChainWrapper<com.wyc.demo03.entity.Log> chain =
+                org.mockito.Mockito.mock(com.baomidou.mybatisplus.extension.conditions.query.LambdaQueryChainWrapper.class);
+        when(logService.lambdaQuery()).thenReturn(chain);
+        when(chain.like(org.mockito.ArgumentMatchers.anyBoolean(), org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any())).thenReturn(chain);
+        when(chain.orderByDesc(org.mockito.ArgumentMatchers.<com.baomidou.mybatisplus.core.toolkit.support.SFunction<com.wyc.demo03.entity.Log, ?>>any())).thenReturn(chain);
+        when(chain.page(org.mockito.ArgumentMatchers.any())).thenReturn(new com.baomidou.mybatisplus.extension.plugins.pagination.Page<>(1, 20));
+
+        mockMvc = MockMvcBuilders.standaloneSetup(
+                        new MainController(userService, meetingRoomService, attendanceRecordService, reservationService, loginAttemptService),
+                        new ReservationController(reservationService, meetingRoomService),
+                        new RoomController(meetingRoomService, reservationService),
+                        new LogController(logService, reservationService, attendanceRecordService))
+                .setViewResolvers(new InternalResourceViewResolver("/WEB-INF/views/", ".html"))
+                .build();
+
         // Act & Assert
         mockMvc.perform(get("/admin/logs"))
                 .andExpect(status().isOk())

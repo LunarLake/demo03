@@ -1,5 +1,6 @@
 package com.wyc.demo03.service.impl;
 
+import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.wyc.demo03.entity.Log;
 import com.wyc.demo03.mapper.LogMapper;
@@ -7,11 +8,18 @@ import com.wyc.demo03.service.LogService;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
 
 @Service
 public class LogServiceImpl extends ServiceImpl<LogMapper, Log> implements LogService {
+
+    @Override
+    public int deleteBefore(LocalDateTime cutoff) {
+        return baseMapper.delete(new LambdaQueryWrapper<Log>()
+                .lt(Log::getTimestamp, cutoff));
+    }
 
     @Override
     public List<Map<String, Object>> countByUrl() {

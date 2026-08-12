@@ -1,6 +1,8 @@
 package com.wyc.demo03.controller;
 
+import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.wyc.demo03.common.ApiResponse;
+import com.wyc.demo03.entity.Log;
 import com.wyc.demo03.service.AttendanceRecordService;
 import com.wyc.demo03.service.LogService;
 import com.wyc.demo03.service.ReservationService;
@@ -8,6 +10,7 @@ import jakarta.servlet.http.HttpSession;
 import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.ResponseBody;
 
 import java.util.List;
@@ -43,26 +46,32 @@ public class LogController {
     }
 
     // ====================================================================
-    // GET /admin/logs —— 系统访问日志列表
+    // GET /admin/logs —— 系统访问日志列表（分页 + 筛选）
     // ====================================================================
     // 数据来源：LogInterceptor.preHandle() 在每次请求时异步写入 t_log 表。
     //
-    // 日志记录的内容：
-    //   username  — 登录用户名（未登录记为"匿名"）
-    //   url       — 请求路径（request.getRequestURI()）
-    //   ip        — 客户端 IP（request.getRemoteAddr()）
-    //   timestamp — 请求时间（LocalDateTime.now()）
+    // 分页：MyBatis-Plus PaginationInnerInterceptor（MybatisPlusConfig 注册），
+    //   page/size 参数控制页码与每页条数；username/url 为可选模糊筛选。
     //
     // 为什么日志在 Interceptor 中记录而不是在 Controller 中？
     //   1. 一处配置，全局生效 → 新增 Controller 不需要额外加日志代码
     //   2. 与业务逻辑解耦 → LogInterceptor 和 LogService 是独立的切面
     //   3. 异步执行 → saveAsync() 在独立线程中写库，不阻塞用户请求
-    //
-    // 注意：logService.list() 返回全部日志，没有分页。
-    //        这在日志量大的情况下需要改进（如添加 PageHelper 分页）。
     @GetMapping("/admin/logs")
-    public String logs(Model model) {
-        model.addAttribute("logList", logService.list());
+    public String logs(@RequestParam(defaultValue = "1") int page,
+                       @RequestParam(defaultValue = "20") int size,
+                       @RequestParam(required = false) String username,
+                       @RequestParam(required = false) String url,
+                       Model model) {
+        Page<Log> result = logService.lambdaQuery()
+                .like(org.springframework.util.StringUtils.hasText(username), Log::getUsername, username)
+                .like(org.springframework.util.StringUtils.hasText(url), Log::getUrl, url)
+                .orderByDesc(Log::getTimestamp)
+                .page(new Page<>(page, size));
+        model.addAttribute("logPage", result);
+        // 回显筛选条件
+        model.addAttribute("username", username);
+        model.addAttribute("url", url);
         return "logs";
     }
 
