@@ -138,6 +138,8 @@ controller → service (interface) → service/impl → mapper (MyBatis-Plus Bas
 
 **Scheduling**: `@EnableScheduling` + `@EnableAsync` on `Demo03Application`. `ReservationScheduler` (`task/` package) runs `@Scheduled(fixedDelay=60_000)`. Log writes use `@Async`.
 
+**API response envelope**: all `/api/*` JSON endpoints return `ApiResponse<T>` record `{ success, data, message }` (`common/ApiResponse`). `GlobalExceptionHandler` (`@RestControllerAdvice`) returns `ApiResponse.fail(...)` for `/api/*` errors and redirects page requests to `/` (full stack logged server-side). Frontend JS must unwrap via `res.data.success` / `res.data.data`.
+
 ### Thymeleaf pitfalls
 
 - **Don't nest `${}` in `th:text`**: use pipe literals `th:text="|${r.roomName} (容纳 ${r.capacity} 人)|"` instead of `th:text="${r.roomName} + ' (容纳 ' + ${r.capacity} + ' 人)'"`.

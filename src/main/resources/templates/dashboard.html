@@ -118,14 +118,23 @@
       };
       lineChart.setOption(lineOption);
 
+      // 统一信封 { success, data, message }：success=false 时显示错误提示
+      function unwrap(body) {
+        return body && body.success === true ? body.data : null;
+      }
+
       function loadPieData() {
         axios
           .get("/api/report-room-usage")
           .then(function (res) {
-            var data = res.data.map(function (item) {
+            var data = unwrap(res.data);
+            if (data === null) {
+              showDataError();
+              return;
+            }
+            pieOption.series[0].data = data.map(function (item) {
               return { value: item.count, name: item.label };
             });
-            pieOption.series[0].data = data;
             pieChart.setOption(pieOption);
           })
           .catch(function (err) {
@@ -138,9 +147,14 @@
         axios
           .get("/api/report-busy-hours")
           .then(function (res) {
+            var data = unwrap(res.data);
+            if (data === null) {
+              showDataError();
+              return;
+            }
             var xData = [],
               sData = [];
-            res.data.forEach(function (item) {
+            data.forEach(function (item) {
               xData.push(item.label + ":00");
               sData.push(item.count);
             });
@@ -182,10 +196,14 @@
         axios
           .get("/api/report-attendance-rate")
           .then(function (res) {
-            var data = res.data.map(function (item) {
+            var data = unwrap(res.data);
+            if (data === null) {
+              showDataError();
+              return;
+            }
+            attendanceOption.series[0].data = data.map(function (item) {
               return { value: item.count, name: item.label };
             });
-            attendanceOption.series[0].data = data;
             attendanceChart.setOption(attendanceOption);
           })
           .catch(function (err) {

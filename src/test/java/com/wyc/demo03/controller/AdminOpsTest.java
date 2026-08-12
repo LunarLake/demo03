@@ -97,7 +97,7 @@ class AdminOpsTest {
     // ============ LogController API ============
 
     @Test
-    void reportRoomUsageReturnsServiceData() {
+    void reportRoomUsageReturnsEnvelope() {
         // Arrange
         LogService logService = mock(LogService.class);
         ReservationService reservationService = mock(ReservationService.class);
@@ -106,14 +106,15 @@ class AdminOpsTest {
         when(reservationService.countByRoom()).thenReturn(List.of(Map.of("label", "A", "count", 1)));
 
         // Act
-        List<Map<String, Object>> result = controller.reportRoomUsage();
+        var result = controller.reportRoomUsage();
 
         // Assert
-        assertEquals(1, result.size());
+        assertTrue(result.success());
+        assertEquals(1, result.data().size());
     }
 
     @Test
-    void reportBusyHoursReturnsServiceData() {
+    void reportBusyHoursReturnsEnvelope() {
         // Arrange
         LogService logService = mock(LogService.class);
         ReservationService reservationService = mock(ReservationService.class);
@@ -122,14 +123,15 @@ class AdminOpsTest {
         when(reservationService.countByHour()).thenReturn(List.of());
 
         // Act
-        List<Map<String, Object>> result = controller.reportBusyHours();
+        var result = controller.reportBusyHours();
 
         // Assert
-        assertTrue(result.isEmpty());
+        assertTrue(result.success());
+        assertTrue(result.data().isEmpty());
     }
 
     @Test
-    void reportAttendanceRateReturnsServiceData() {
+    void reportAttendanceRateReturnsEnvelope() {
         // Arrange
         LogService logService = mock(LogService.class);
         ReservationService reservationService = mock(ReservationService.class);
@@ -138,10 +140,11 @@ class AdminOpsTest {
         when(attendanceRecordService.countAttendanceRate()).thenReturn(List.of(Map.of("label", "已签到", "count", 5)));
 
         // Act
-        List<Map<String, Object>> result = controller.reportAttendanceRate();
+        var result = controller.reportAttendanceRate();
 
         // Assert
-        assertEquals(1, result.size());
+        assertTrue(result.success());
+        assertEquals(1, result.data().size());
     }
 
     // ============ ReservationScheduler ============

@@ -1,5 +1,6 @@
 package com.wyc.demo03.controller;
 
+import com.wyc.demo03.common.ApiResponse;
 import com.wyc.demo03.entity.MeetingRoom;
 import com.wyc.demo03.entity.Reservation;
 import com.wyc.demo03.service.MeetingRoomService;
@@ -216,8 +217,8 @@ public class ReservationController {
     // 注意：只返回 status=1（已批准）的预约。待审批(status=0)的预约不在甘特图上显示。
     @ResponseBody
     @GetMapping("/api/room-schedule")
-    public List<Map<String, Object>> roomSchedule(@RequestParam Long roomId, @RequestParam String date) {
-        return reservationService.findScheduleByRoomAndDate(roomId, date);
+    public ApiResponse<List<Map<String, Object>>> roomSchedule(@RequestParam Long roomId, @RequestParam String date) {
+        return ApiResponse.ok(reservationService.findScheduleByRoomAndDate(roomId, date));
     }
 
     // ====================================================================

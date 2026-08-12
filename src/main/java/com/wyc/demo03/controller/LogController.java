@@ -1,5 +1,6 @@
 package com.wyc.demo03.controller;
 
+import com.wyc.demo03.common.ApiResponse;
 import com.wyc.demo03.service.AttendanceRecordService;
 import com.wyc.demo03.service.LogService;
 import com.wyc.demo03.service.ReservationService;
@@ -94,8 +95,8 @@ public class LogController {
     //   GROUP BY rm.room_name ORDER BY count DESC
     @ResponseBody
     @GetMapping("/api/report-room-usage")
-    public List<Map<String, Object>> reportRoomUsage() {
-        return reservationService.countByRoom();
+    public ApiResponse<List<Map<String, Object>>> reportRoomUsage() {
+        return ApiResponse.ok(reservationService.countByRoom());
     }
 
     // ====================================================================
@@ -113,8 +114,8 @@ public class LogController {
     //   GROUP BY HOUR(r.start_time) ORDER BY hour
     @ResponseBody
     @GetMapping("/api/report-busy-hours")
-    public List<Map<String, Object>> reportBusyHours() {
-        return reservationService.countByHour();
+    public ApiResponse<List<Map<String, Object>>> reportBusyHours() {
+        return ApiResponse.ok(reservationService.countByHour());
     }
 
     // ====================================================================
@@ -127,7 +128,7 @@ public class LogController {
     //   前端用 ECharts 饼图渲染。
     @ResponseBody
     @GetMapping("/api/report-attendance-rate")
-    public List<Map<String, Object>> reportAttendanceRate() {
-        return attendanceRecordService.countAttendanceRate();
+    public ApiResponse<List<Map<String, Object>>> reportAttendanceRate() {
+        return ApiResponse.ok(attendanceRecordService.countAttendanceRate());
     }
 }

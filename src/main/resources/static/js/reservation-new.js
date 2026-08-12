@@ -335,11 +335,19 @@ function loadSchedule() {
 
   // ---- AJAX 请求日程数据 ----
   // GET /api/room-schedule?roomId=X&date=2026-06-09
-  // 返回 JSON 数组：[{start_time, end_time, userName, role}, ...]
+  // 返回统一信封 { success, data, message }，data 为
+  // [{start_time, end_time, userName, role}, ...]
   axios
     .get("/api/room-schedule?roomId=" + roomId + "&date=" + getDate())
     .then(function (res) {
-      scheduleData = res.data; // 更新全局 scheduleData
+      var body = res.data;
+      if (!body.success) {
+        // 业务失败（服务器返回错误信封）→ 显示提示
+        var errBox = document.getElementById("scheduleError");
+        if (errBox) errBox.classList.remove("d-none");
+        return;
+      }
+      scheduleData = body.data; // 更新全局 scheduleData
       refreshChart(); // 重新渲染甘特图
       // 加载成功 → 隐藏错误提示
       var errBox = document.getElementById("scheduleError");
