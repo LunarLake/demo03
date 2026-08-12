@@ -64,6 +64,11 @@
                       class="badge bg-danger"
                       >已拒绝</span
                     >
+                    <div
+                      th:if="${r['reservation_status'] == 2 and r['reject_reason'] != null}"
+                      class="small text-muted mt-1"
+                      th:text="'原因：' + ${r['reject_reason']}"
+                    ></div>
                     <span
                       th:if="${r['reservation_status'] == 3}"
                       class="badge bg-secondary"

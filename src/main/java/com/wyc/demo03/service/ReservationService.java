@@ -12,8 +12,8 @@ public interface ReservationService extends IService<Reservation> {
     String apply(Reservation reservation, HttpSession session);
     // 管理员审批通过预约，返回结果字符串（成功或失败原因）
     String approve(Long id);
-    // 管理员审批拒绝预约，返回结果字符串（成功或失败原因）
-    void reject(Long id);
+    // 管理员审批拒绝预约（可附带拒绝原因，展示给申请人）
+    void reject(Long id, String reason);
     // 用户签到，返回结果字符串（成功或失败原因）
     String checkIn(Long reservationId, Long userId, String code, String ip);
     // 用户取消预约，返回结果字符串（成功或失败原因）

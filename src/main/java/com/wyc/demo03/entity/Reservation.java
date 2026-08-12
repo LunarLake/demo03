@@ -28,6 +28,8 @@ public class Reservation {
     private LocalDateTime endTime;
     //审核状态：0-待审批，1-已批准，2-已拒绝，3-教师覆盖取消，4-用户取消，5-超时释放
     private Integer reservationStatus;
+    //拒绝原因（管理员拒绝时填写，展示在申请人的"我的预约"中）
+    private String rejectReason;
     //教师批准后系统生成的4位随机签到码
     private String checkInCode;
     //参会人数

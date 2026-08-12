@@ -37,6 +37,7 @@
                 <tr>
                   <th>申请人</th>
                   <th>会议室</th>
+                  <th>人数/容量</th>
                   <th>开始时间</th>
                   <th>结束时间</th>
                   <th>操作</th>
@@ -51,6 +52,18 @@
                     ></a>
                   </td>
                   <td th:text="${a.roomName}"></td>
+                  <td>
+                    <span
+                      th:text="${a['attendee_count'] != null ? a['attendee_count'] : '-'}"
+                    ></span>
+                    /
+                    <span th:text="${a.capacity}"></span>
+                    <span
+                      th:if="${a['attendee_count'] != null and a.capacity != null and a['attendee_count'] > a.capacity}"
+                      class="badge bg-danger ms-1"
+                      >超员</span
+                    >
+                  </td>
                   <td
                     th:text="${#strings.substring(a['start_time'].toString(), 0, 16)}"
                   ></td>
@@ -59,28 +72,24 @@
                   ></td>
                   <td>
                     <div class="d-flex gap-2">
-                      <form
-                        th:action="@{/reservation/approve}"
-                        method="post"
-                        style="display: inline"
+                      <button
+                        type="button"
+                        class="btn btn-sm btn-success"
+                        data-bs-toggle="modal"
+                        data-bs-target="#approveModal"
+                        th:attr="data-id=${a.id},data-user=${a.userName},data-room=${a.roomName}"
                       >
-                        <input type="hidden" name="_csrf" th:value="${_csrf}" />
-                        <input type="hidden" name="id" th:value="${a.id}" />
-                        <button type="submit" class="btn btn-sm btn-success">
-                          批准
-                        </button>
-                      </form>
-                      <form
-                        th:action="@{/reservation/reject}"
-                        method="post"
-                        style="display: inline"
+                        批准
+                      </button>
+                      <button
+                        type="button"
+                        class="btn btn-sm btn-danger"
+                        data-bs-toggle="modal"
+                        data-bs-target="#rejectModal"
+                        th:attr="data-id=${a.id},data-user=${a.userName},data-room=${a.roomName}"
                       >
-                        <input type="hidden" name="_csrf" th:value="${_csrf}" />
-                        <input type="hidden" name="id" th:value="${a.id}" />
-                        <button type="submit" class="btn btn-sm btn-danger">
-                          拒绝
-                        </button>
-                      </form>
+                        拒绝
+                      </button>
                     </div>
                   </td>
                 </tr>
@@ -97,5 +106,119 @@
       </section>
     </main>
     <th:block th:replace="~{fragments/common-scripts :: scripts}"></th:block>
+
+    <!-- 批准确认弹窗 -->
+    <div class="modal fade" id="approveModal" tabindex="-1">
+      <div class="modal-dialog">
+        <div class="modal-content">
+          <form th:action="@{/reservation/approve}" method="post">
+            <input type="hidden" name="_csrf" th:value="${_csrf}" />
+            <input type="hidden" name="id" id="approveId" />
+            <div class="modal-header">
+              <h5 class="modal-title">确认批准</h5>
+              <button
+                type="button"
+                class="btn-close"
+                data-bs-dismiss="modal"
+              ></button>
+            </div>
+            <div class="modal-body">
+              <p>
+                确认批准 <strong id="approveUser"></strong> 对
+                <strong id="approveRoom"></strong> 的预约申请？
+              </p>
+              <p class="text-muted small mb-0">
+                批准后将生成 4 位签到码，请告知申请人用于现场签到。
+              </p>
+            </div>
+            <div class="modal-footer">
+              <button
+                type="button"
+                class="btn btn-secondary"
+                data-bs-dismiss="modal"
+              >
+                取消
+              </button>
+              <button type="submit" class="btn btn-success">确认批准</button>
+            </div>
+          </form>
+        </div>
+      </div>
+    </div>
+
+    <!-- 拒绝弹窗（可选原因） -->
+    <div class="modal fade" id="rejectModal" tabindex="-1">
+      <div class="modal-dialog">
+        <div class="modal-content">
+          <form th:action="@{/reservation/reject}" method="post">
+            <input type="hidden" name="_csrf" th:value="${_csrf}" />
+            <input type="hidden" name="id" id="rejectId" />
+            <div class="modal-header">
+              <h5 class="modal-title">确认拒绝</h5>
+              <button
+                type="button"
+                class="btn-close"
+                data-bs-dismiss="modal"
+              ></button>
+            </div>
+            <div class="modal-body">
+              <p>
+                确认拒绝 <strong id="rejectUser"></strong> 对
+                <strong id="rejectRoom"></strong> 的预约申请？
+              </p>
+              <div class="mb-3">
+                <label for="rejectReason" class="form-label"
+                  >拒绝原因（选填，将展示给申请人）</label
+                >
+                <textarea
+                  class="form-control"
+                  id="rejectReason"
+                  name="reason"
+                  rows="3"
+                  placeholder="如：该时段已有教学安排"
+                ></textarea>
+              </div>
+            </div>
+            <div class="modal-footer">
+              <button
+                type="button"
+                class="btn btn-secondary"
+                data-bs-dismiss="modal"
+              >
+                取消
+              </button>
+              <button type="submit" class="btn btn-danger">确认拒绝</button>
+            </div>
+          </form>
+        </div>
+      </div>
+    </div>
+
+    <script>
+      // 打开弹窗时把对应行数据填入隐藏字段与文案
+      document
+        .getElementById("approveModal")
+        .addEventListener("show.bs.modal", function (event) {
+          const btn = event.relatedTarget;
+          document.getElementById("approveId").value =
+            btn.getAttribute("data-id");
+          document.getElementById("approveUser").textContent =
+            btn.getAttribute("data-user");
+          document.getElementById("approveRoom").textContent =
+            btn.getAttribute("data-room");
+        });
+      document
+        .getElementById("rejectModal")
+        .addEventListener("show.bs.modal", function (event) {
+          const btn = event.relatedTarget;
+          document.getElementById("rejectId").value =
+            btn.getAttribute("data-id");
+          document.getElementById("rejectUser").textContent =
+            btn.getAttribute("data-user");
+          document.getElementById("rejectRoom").textContent =
+            btn.getAttribute("data-room");
+          document.getElementById("rejectReason").value = "";
+        });
+    </script>
   </body>
 </html>

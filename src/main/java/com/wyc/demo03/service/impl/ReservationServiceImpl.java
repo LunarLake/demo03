@@ -258,10 +258,14 @@ public class ReservationServiceImpl extends ServiceImpl<ReservationMapper, Reser
     //   只有一个单表的 updateById 操作，MyBatis-Plus 内置了单条 SQL 的原子性，
     //   不需要额外的事务包装。如果 update 失败，什么都不会发生。
     @Override
-    public void reject(Long id) {
+    public void reject(Long id, String reason) {
         Reservation reservation = getById(id);
         if (reservation != null && reservation.getReservationStatus() == 0) {
             reservation.setReservationStatus(2);  // 状态 0 → 2（已拒绝）
+            // 拒绝原因（可选）：为空时给默认文案，让申请人明确知道被拒
+            reservation.setRejectReason(reason == null || reason.isBlank()
+                    ? "该时段无法安排，如有疑问请联系管理员"
+                    : reason.trim());
             updateById(reservation);
         }
     }

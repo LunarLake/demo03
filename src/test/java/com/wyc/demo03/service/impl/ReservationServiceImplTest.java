@@ -277,11 +277,28 @@ class ReservationServiceImplTest {
         when(reservationMapper.selectById(1L)).thenReturn(pending);
 
         // Act
-        service.reject(1L);
+        service.reject(1L, "该时段已有教学安排");
 
         // Assert
         assertEquals(2, pending.getReservationStatus());
+        assertEquals("该时段已有教学安排", pending.getRejectReason());
         verify(reservationMapper).updateById(pending);
+    }
+
+    @Test
+    void rejectUsesDefaultReasonWhenBlank() {
+        // Arrange
+        Reservation pending = new Reservation();
+        pending.setId(1L);
+        pending.setReservationStatus(0);
+        when(reservationMapper.selectById(1L)).thenReturn(pending);
+
+        // Act
+        service.reject(1L, "  ");
+
+        // Assert
+        assertEquals(2, pending.getReservationStatus());
+        assertEquals("该时段无法安排，如有疑问请联系管理员", pending.getRejectReason());
     }
 
     @Test
@@ -293,7 +310,7 @@ class ReservationServiceImplTest {
         when(reservationMapper.selectById(1L)).thenReturn(approved);
 
         // Act
-        service.reject(1L);
+        service.reject(1L, "该时段已有教学安排");
 
         // Assert
         assertEquals(1, approved.getReservationStatus());

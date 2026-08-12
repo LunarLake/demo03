@@ -157,8 +157,8 @@ public class ReservationController {
     // Service 层有防御：只有 status=0 的预约才能被拒绝，
     // 已通过/已拒绝/被覆盖/已取消的预约即使点了拒绝也会被静默忽略。
     @PostMapping("/reservation/reject")
-    public String reject(Long id, RedirectAttributes ra) {
-        reservationService.reject(id);
+    public String reject(Long id, String reason, RedirectAttributes ra) {
+        reservationService.reject(id, reason);
         ra.addFlashAttribute("info", "已拒绝该预约申请");
         return "redirect:/reservation/approve-list";
     }
