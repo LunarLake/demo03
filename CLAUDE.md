@@ -6,9 +6,19 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ```bash
 .\mvnw spring-boot:run      # PowerShell
-.\mvnw test                  # Run tests
+.\mvnw test                  # Run tests (95 tests, JaCoCo line coverage ~86%)
 .\mvnw clean compile         # Compile only
 ```
+
+Coverage report: `target/site/jacoco/index.html` (JaCoCo plugin bound to test phase).
+
+### Testing conventions
+
+- Service tests use Mockito mocks + `ReflectionTestUtils.setField(service, "baseMapper", mapper)` (ServiceImpl's parent-class field is not injectable via `@InjectMocks`).
+- MyBatis-Plus 3.5.15 `BaseMapper` has overloaded `insert(T)`/`insert(Collection<T>)` etc. — always use typed matchers: `any(Reservation.class)`, never bare `any()`.
+- Standalone MockMvc (`MockMvcBuilders.standaloneSetup`) needs an `InternalResourceViewResolver` (prefix `/WEB-INF/views/`, suffix `.html`) to avoid "Circular view path" errors.
+- Shared stubs in `@BeforeEach` used by only some tests must be `lenient().when(...)` (Mockito strict stubs).
+- `LambdaQueryChainWrapper.count()` returns `Long`; `AttendanceRecordService.countTodayCheckIn()` returns `int`.
 
 MySQL `db02`。数据库账号密码勿写入仓库：复制 `src/main/resources/application-local.yml.example` 为 `application-local.yml` 填写，或设置环境变量 `DB_USERNAME` / `DB_PASSWORD`（以及可选的 `DB_HOST` / `DB_PORT` / `DB_NAME`）。
 
