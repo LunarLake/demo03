@@ -164,4 +164,101 @@ class UserServiceImplTest {
         assertTrue(forged.getPassword().startsWith("$2a$"));
         verify(userMapper).insert(eq(forged));
     }
+
+    // ============ changePassword ============
+
+    @Test
+    void changePasswordReturnsUserNotFound() {
+        // Arrange
+        when(userMapper.selectById(99L)).thenReturn(null);
+
+        // Act
+        String result = userService.changePassword(99L, "old", "newpass123");
+
+        // Assert
+        assertEquals("user_not_found", result);
+    }
+
+    @Test
+    void changePasswordRejectsWrongOldPassword() {
+        // Arrange
+        User user = new User();
+        user.setId(1L);
+        user.setPassword(BCrypt.hashpw("correct-old"));
+        when(userMapper.selectById(1L)).thenReturn(user);
+
+        // Act
+        String result = userService.changePassword(1L, "wrong-old", "newpass123");
+
+        // Assert
+        assertEquals("wrong_password", result);
+    }
+
+    @Test
+    void changePasswordHashesNewPasswordOnSuccess() {
+        // Arrange
+        User user = new User();
+        user.setId(1L);
+        user.setPassword(BCrypt.hashpw("correct-old"));
+        when(userMapper.selectById(1L)).thenReturn(user);
+        when(userMapper.updateById(any(User.class))).thenReturn(1);
+
+        // Act
+        String result = userService.changePassword(1L, "correct-old", "newpass123");
+
+        // Assert
+        assertEquals("success", result);
+        assertTrue(user.getPassword().startsWith("$2a$"));
+        assertTrue(BCrypt.checkpw("newpass123", user.getPassword()));
+    }
+
+    @Test
+    void changePasswordMigratesPlaintextStoredPassword() {
+        // Arrange：存量明文密码账号，验证原密码后哈希新密码
+        User user = new User();
+        user.setId(1L);
+        user.setPassword("plain-old");
+        when(userMapper.selectById(1L)).thenReturn(user);
+        when(userMapper.update(any(), any())).thenReturn(1);
+        when(userMapper.updateById(any(User.class))).thenReturn(1);
+
+        // Act
+        String result = userService.changePassword(1L, "plain-old", "newpass123");
+
+        // Assert
+        assertEquals("success", result);
+        assertTrue(BCrypt.checkpw("newpass123", user.getPassword()));
+    }
+
+    // ============ updateProfile ============
+
+    @Test
+    void updateProfileUpdatesNameAndEmail() {
+        // Arrange
+        User user = new User();
+        user.setId(1L);
+        user.setName("旧名字");
+        when(userMapper.selectById(1L)).thenReturn(user);
+        when(userMapper.updateById(any(User.class))).thenReturn(1);
+
+        // Act
+        String result = userService.updateProfile(1L, "新名字", "new@example.com");
+
+        // Assert
+        assertEquals("success", result);
+        assertEquals("新名字", user.getName());
+        assertEquals("new@example.com", user.getEmail());
+    }
+
+    @Test
+    void updateProfileReturnsUserNotFound() {
+        // Arrange
+        when(userMapper.selectById(99L)).thenReturn(null);
+
+        // Act
+        String result = userService.updateProfile(99L, "名字", "x@x.com");
+
+        // Assert
+        assertEquals("user_not_found", result);
+    }
 }

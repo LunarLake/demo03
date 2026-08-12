@@ -1,0 +1,138 @@
+<!doctype html>
+<html xmlns:th="http://www.thymeleaf.org">
+  <head>
+    <th:block
+      th:replace="~{fragments/common-head :: head('个人中心')}"
+    ></th:block>
+  </head>
+  <body class="d-flex">
+    <th:block th:replace="~{fragments/sidebar :: sidebar}"></th:block>
+    <main class="content-area flex-grow-1">
+      <th:block
+        th:replace="~{fragments/header :: header('个人中心')}"
+      ></th:block>
+      <section class="container-fluid py-4 px-3 px-md-4">
+        <div
+          th:if="${info != null}"
+          class="alert alert-info alert-dismissible fade show"
+          role="alert"
+        >
+          <span th:text="${info}"></span>
+          <button
+            type="button"
+            class="btn-close"
+            data-bs-dismiss="alert"
+          ></button>
+        </div>
+
+        <div class="row g-3">
+          <!-- 个人资料卡片 -->
+          <div class="col-12 col-lg-6">
+            <div class="card summary-card">
+              <div class="card-header bg-white border-0">
+                <h2 class="h5 mb-0">个人资料</h2>
+              </div>
+              <div class="card-body">
+                <form th:action="@{/profile/update}" method="post">
+                  <input type="hidden" name="_csrf" th:value="${_csrf}" />
+                  <div class="mb-3">
+                    <label class="form-label">用户名（不可修改）</label>
+                    <input
+                      type="text"
+                      class="form-control"
+                      th:value="${username}"
+                      disabled
+                    />
+                  </div>
+                  <div class="mb-3">
+                    <label for="name" class="form-label">姓名</label>
+                    <input
+                      type="text"
+                      class="form-control"
+                      id="name"
+                      name="name"
+                      th:value="${name}"
+                      required
+                    />
+                  </div>
+                  <div class="mb-3">
+                    <label for="email" class="form-label"
+                      >邮箱（用于接收通知）</label
+                    >
+                    <input
+                      type="email"
+                      class="form-control"
+                      id="email"
+                      name="email"
+                      th:value="${email}"
+                    />
+                  </div>
+                  <button type="submit" class="btn btn-primary">
+                    保存资料
+                  </button>
+                </form>
+              </div>
+            </div>
+          </div>
+
+          <!-- 修改密码卡片 -->
+          <div class="col-12 col-lg-6">
+            <div class="card summary-card">
+              <div class="card-header bg-white border-0">
+                <h2 class="h5 mb-0">修改密码</h2>
+              </div>
+              <div class="card-body">
+                <form th:action="@{/profile/password}" method="post">
+                  <input type="hidden" name="_csrf" th:value="${_csrf}" />
+                  <div class="mb-3">
+                    <label for="oldPassword" class="form-label">原密码</label>
+                    <input
+                      type="password"
+                      class="form-control"
+                      id="oldPassword"
+                      name="oldPassword"
+                      required
+                      autocomplete="current-password"
+                    />
+                  </div>
+                  <div class="mb-3">
+                    <label for="newPassword" class="form-label"
+                      >新密码（至少 6 位）</label
+                    >
+                    <input
+                      type="password"
+                      class="form-control"
+                      id="newPassword"
+                      name="newPassword"
+                      minlength="6"
+                      required
+                      autocomplete="new-password"
+                    />
+                  </div>
+                  <div class="mb-3">
+                    <label for="confirmPassword" class="form-label"
+                      >确认新密码</label
+                    >
+                    <input
+                      type="password"
+                      class="form-control"
+                      id="confirmPassword"
+                      name="confirmPassword"
+                      minlength="6"
+                      required
+                      autocomplete="new-password"
+                    />
+                  </div>
+                  <button type="submit" class="btn btn-primary">
+                    修改密码
+                  </button>
+                </form>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+    </main>
+    <th:block th:replace="~{fragments/common-scripts :: scripts}"></th:block>
+  </body>
+</html>

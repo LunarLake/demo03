@@ -22,19 +22,7 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
         if (user == null) {
             return null;
         }
-        String stored = user.getPassword();
-        // 已哈希密码：直接 BCrypt 校验
-        if (stored.startsWith(BCRYPT_PREFIX)) {
-            return BCrypt.checkpw(password, stored) ? user : null;
-        }
-        // 存量明文密码（历史数据）：明文比对，成功后立即重哈希写回 —— 登录即迁移。
-        // 全部存量账号迁移完成后可移除此分支。
-        if (stored.equals(password)) {
-            String hashed = BCrypt.hashpw(password);
-            lambdaUpdate().eq(User::getId, user.getId())
-                    .set(User::getPassword, hashed)
-                    .update();
-            user.setPassword(hashed);
+        if (verifyPassword(user, password)) {
             return user;
         }
         return null;
@@ -46,5 +34,53 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User> implements Us
         user.setRole(RoleConstant.STUDENT);
         user.setPassword(BCrypt.hashpw(user.getPassword()));
         super.save(user);
+    }
+
+    @Override
+    public String changePassword(Long userId, String oldPassword, String newPassword) {
+        User user = getById(userId);
+        if (user == null) {
+            return "user_not_found";
+        }
+        if (!verifyPassword(user, oldPassword)) {
+            return "wrong_password";
+        }
+        user.setPassword(BCrypt.hashpw(newPassword));
+        updateById(user);
+        return "success";
+    }
+
+    @Override
+    public String updateProfile(Long userId, String name, String email) {
+        User user = getById(userId);
+        if (user == null) {
+            return "user_not_found";
+        }
+        user.setName(name);
+        user.setEmail(email);
+        updateById(user);
+        return "success";
+    }
+
+    /**
+     * 校验输入密码与库中密码是否匹配。
+     * 已哈希密码走 BCrypt；存量明文密码匹配成功后立即重哈希写回（登录即迁移）。
+     */
+    private boolean verifyPassword(User user, String input) {
+        String stored = user.getPassword();
+        if (stored.startsWith(BCRYPT_PREFIX)) {
+            return BCrypt.checkpw(input, stored);
+        }
+        // 存量明文密码（历史数据）：明文比对，成功后立即重哈希写回。
+        // 全部存量账号迁移完成后可移除此分支。
+        if (stored.equals(input)) {
+            String hashed = BCrypt.hashpw(input);
+            lambdaUpdate().eq(User::getId, user.getId())
+                    .set(User::getPassword, hashed)
+                    .update();
+            user.setPassword(hashed);
+            return true;
+        }
+        return false;
     }
 }
