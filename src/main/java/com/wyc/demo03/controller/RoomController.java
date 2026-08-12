@@ -20,9 +20,9 @@ import java.util.List;
  *
  * 权限控制：
  *   GET  /rooms           — 所有角色可访问（RoleInterceptor 只检查登录态）
- *   POST /room/add         — TeacherInterceptor 拦截，只有教师能访问
- *   POST /room/update      — TeacherInterceptor 拦截
- *   POST /room/delete/{id} — TeacherInterceptor 拦截
+ *   POST /room/add         — AdminInterceptor 拦截，只有管理员能访问
+ *   POST /room/update      — AdminInterceptor 拦截
+ *   POST /room/delete/{id} — AdminInterceptor 拦截
  *
  * RoomController 不接收 @Valid 实体 → 不使用 BindingResult。
  * 新增和修改的 MeetingRoom 参数直接绑定表单字段（roomName, capacity, equipment, roomStatus），
@@ -55,7 +55,7 @@ public class RoomController {
     //
     // 角色信息传递：
     //   将 session.role 放入 model，前端 Thymeleaf 用 th:if 判断是否渲染
-    //   "新增会议室"、"编辑"、"删除"等教师专属按钮。
+    //   "新增会议室"、"编辑"、"删除"等管理员专属按钮。
     @GetMapping("/rooms")
     public String list(String keyword, Model model, HttpSession session) {
         // 从 session 获取当前用户角色，传给前端用于条件渲染
@@ -81,7 +81,7 @@ public class RoomController {
     }
 
     // ====================================================================
-    // POST /room/add —— 新增会议室（教师专属）
+    // POST /room/add —— 新增会议室（管理员专属）
     // ====================================================================
     // MeetingRoom 实体参数由 Spring MVC 自动绑定表单字段：
     //   <input name="roomName">     → room.setRoomName()
@@ -105,7 +105,7 @@ public class RoomController {
     }
 
     // ====================================================================
-    // POST /room/update —— 修改会议室信息（教师专属）
+    // POST /room/update —— 修改会议室信息（管理员专属）
     // ====================================================================
     // MeetingRoom 实体必须包含 id 字段（来自表单隐藏字段 <input type="hidden" name="id">），
     // MyBatis-Plus 的 updateById() 根据 id 执行 UPDATE。
@@ -125,7 +125,7 @@ public class RoomController {
     }
 
     // ====================================================================
-    // POST /room/delete/{id} —— 删除会议室（教师专属）
+    // POST /room/delete/{id} —— 删除会议室（管理员专属）
     // ====================================================================
     // {id} 是路径变量（@PathVariable），来自 RESTful 风格的 URL /room/delete/5
     //

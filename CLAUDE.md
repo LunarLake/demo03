@@ -41,35 +41,35 @@ controller → service (interface) → service/impl → mapper (MyBatis-Plus Bas
 
 ### Controller endpoints
 
-| Controller                | Endpoint                       | Method | Role    | Purpose                                                                                          |
-| ------------------------- | ------------------------------ | ------ | ------- | ------------------------------------------------------------------------------------------------ |
-| **MainController**        | `/`, `/index`                  | GET    | any     | Home dashboard: room count + my-reservation count + pending count + today check-in               |
-|                           | `/login`                       | GET    | —       | Login page (captcha via `/verityImg`)                                                            |
-|                           | `/loginAction`                 | POST   | —       | Authenticate, regenerate session, set session attrs                                              |
-|                           | `/register`                    | GET    | —       | Registration page                                                                                |
-|                           | `/registerAction`              | POST   | —       | Create user, catch duplicate username (role forced to STUDENT)                                   |
-|                           | `/logout`                      | GET    | any     | Invalidate session                                                                               |
-|                           | `/verityImg`                   | GET    | —       | Generate captcha image (Hutool LineCaptcha)                                                      |
-| **RoomController**        | `/rooms`                       | GET    | any     | Room list with keyword search                                                                    |
-|                           | `/room/add`                    | POST   | TEACHER | Add meeting room                                                                                 |
-|                           | `/room/update`                 | POST   | TEACHER | Update room info                                                                                 |
-|                           | `/room/delete/{id}`            | POST   | TEACHER | Delete room (checks for active reservations first)                                               |
-| **ReservationController** | `/reservation/apply`           | POST   | any     | Submit reservation (student→status=0, teacher→status=1); validates attendeeCount ≤ room capacity |
-|                           | `/my-reservations`             | GET    | any     | User's reservations with attend_status                                                           |
-|                           | `/reservation/approve-list`    | GET    | ADMIN   | Pending approvals (status=0)                                                                     |
-|                           | `/reservation/approve`         | POST   | ADMIN   | Approve → status=1 + generate 4-digit code                                                       |
-|                           | `/reservation/reject`          | POST   | ADMIN   | Reject → status=2                                                                                |
-|                           | `/reservation/new`             | GET    | any     | ECharts timeline page; validates room exists + roomStatus=0 before rendering                     |
-|                           | `/api/room-schedule`           | GET    | any     | JSON: approved reservations (start_time, end_time, userName, role) for room+date                 |
-|                           | `/reservation/cancel/{id}`     | POST   | any     | Cancel own reservation → status=4 (only status 0/1, not if checked in)                           |
-|                           | `/reservation/check-in/{id}`   | GET    | any     | Check-in code entry page                                                                         |
-|                           | `/reservation/check-in-action` | POST   | any     | Verify code + time window (start-10min ~ start+15min), update attend_status=1                    |
-|                           | `/reservation/detail/{id}`     | GET    | ADMIN   | Reservation + attendance detail view                                                             |
-| **LogController**         | `/admin/logs`                  | GET    | ADMIN   | System access log list                                                                           |
-|                           | `/admin/dashboard`             | GET    | ADMIN   | ECharts dashboard page                                                                           |
-|                           | `/api/report-room-usage`       | GET    | ADMIN   | JSON: per-room reservation count                                                                 |
-|                           | `/api/report-busy-hours`       | GET    | ADMIN   | JSON: per-hour reservation count                                                                 |
-|                           | `/api/report-attendance-rate`  | GET    | ADMIN   | JSON: attended vs absent count                                                                   |
+| Controller                | Endpoint                       | Method | Role  | Purpose                                                                                          |
+| ------------------------- | ------------------------------ | ------ | ----- | ------------------------------------------------------------------------------------------------ |
+| **MainController**        | `/`, `/index`                  | GET    | any   | Home dashboard: room count + my-reservation count + pending count + today check-in               |
+|                           | `/login`                       | GET    | —     | Login page (captcha via `/verityImg`)                                                            |
+|                           | `/loginAction`                 | POST   | —     | Authenticate, regenerate session, set session attrs                                              |
+|                           | `/register`                    | GET    | —     | Registration page                                                                                |
+|                           | `/registerAction`              | POST   | —     | Create user, catch duplicate username (role forced to STUDENT)                                   |
+|                           | `/logout`                      | GET    | any   | Invalidate session                                                                               |
+|                           | `/verityImg`                   | GET    | —     | Generate captcha image (Hutool LineCaptcha)                                                      |
+| **RoomController**        | `/rooms`                       | GET    | any   | Room list with keyword search                                                                    |
+|                           | `/room/add`                    | POST   | ADMIN | Add meeting room                                                                                 |
+|                           | `/room/update`                 | POST   | ADMIN | Update room info                                                                                 |
+|                           | `/room/delete/{id}`            | POST   | ADMIN | Delete room (checks for active reservations first)                                               |
+| **ReservationController** | `/reservation/apply`           | POST   | any   | Submit reservation (student→status=0, teacher→status=1); validates attendeeCount ≤ room capacity |
+|                           | `/my-reservations`             | GET    | any   | User's reservations with attend_status                                                           |
+|                           | `/reservation/approve-list`    | GET    | ADMIN | Pending approvals (status=0)                                                                     |
+|                           | `/reservation/approve`         | POST   | ADMIN | Approve → status=1 + generate 4-digit code                                                       |
+|                           | `/reservation/reject`          | POST   | ADMIN | Reject → status=2                                                                                |
+|                           | `/reservation/new`             | GET    | any   | ECharts timeline page; validates room exists + roomStatus=0 before rendering                     |
+|                           | `/api/room-schedule`           | GET    | any   | JSON: approved reservations (start_time, end_time, userName, role) for room+date                 |
+|                           | `/reservation/cancel/{id}`     | POST   | any   | Cancel own reservation → status=4 (only status 0/1, not if checked in)                           |
+|                           | `/reservation/check-in/{id}`   | GET    | any   | Check-in code entry page                                                                         |
+|                           | `/reservation/check-in-action` | POST   | any   | Verify code + time window (start-10min ~ start+15min), update attend_status=1                    |
+|                           | `/reservation/detail/{id}`     | GET    | ADMIN | Reservation + attendance detail view                                                             |
+| **LogController**         | `/admin/logs`                  | GET    | ADMIN | System access log list                                                                           |
+|                           | `/admin/dashboard`             | GET    | ADMIN | ECharts dashboard page                                                                           |
+|                           | `/api/report-room-usage`       | GET    | ADMIN | JSON: per-room reservation count                                                                 |
+|                           | `/api/report-busy-hours`       | GET    | ADMIN | JSON: per-hour reservation count                                                                 |
+|                           | `/api/report-attendance-rate`  | GET    | ADMIN | JSON: attended vs absent count                                                                   |
 
 ### Session attributes (set by loginAction)
 
@@ -86,11 +86,10 @@ controller → service (interface) → service/impl → mapper (MyBatis-Plus Bas
 
 - **RoleInterceptor** — checks `session.username != null`, redirects to `/login`.
 - **LogInterceptor** — records every request to `t_log` with username (or "匿名"), IP, URL, timestamp. Writes asynchronously via `LogService.saveAsync()`.
-- **TeacherInterceptor** — checks `session.role == "TEACHER"`, redirects to `/` if not. Covers `/room/add`, `/room/update`, `/room/delete/**` (room management only).
-- **AdminInterceptor** — checks `session.role == "ADMIN"`, redirects to `/` if not. Covers `/reservation/approve`, `/reservation/approve-list`, `/reservation/reject`, `/reservation/detail/**`, `/admin/**`, `/api/report-*` (approval management + dashboard + logs).
+- **AdminInterceptor** — checks `session.role == "ADMIN"`, redirects to `/` if not. Covers `/room/add`, `/room/update`, `/room/delete/**`, `/reservation/approve`, `/reservation/approve-list`, `/reservation/reject`, `/reservation/detail/**`, `/admin/**`, `/api/report-*` (room management + approval management + dashboard + logs).
 - **Excluded paths** (RoleInterceptor + LogInterceptor): `/verityImg`, `/error`, `/css/**`, `/js/**`, `/images/**`, `/**/*.{css,js,jpg,png,gif,ico}`
 - **RoleInterceptor additional excludes**: `/login`, `/loginAction`, `/register`, `/registerAction`
-- **Teacher/AdminInterceptor** use `addPathPatterns` only (no excludes needed).
+- **AdminInterceptor** uses `addPathPatterns` only (no excludes needed).
 
 ### Core business logic
 

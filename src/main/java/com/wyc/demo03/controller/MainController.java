@@ -154,7 +154,7 @@ public class MainController {
             newSession.setAttribute("username", user.getUsername());  // RoleInterceptor 认证检查
             newSession.setAttribute("Id", user.getId());              // 预约操作的身份标识
             newSession.setAttribute("name", user.getName());          // header.html 显示用户名
-            newSession.setAttribute("role", user.getRole());          // Teacher/AdminInterceptor + 侧边栏
+            newSession.setAttribute("role", user.getRole());          // AdminInterceptor + 侧边栏
             newSession.setAttribute("email", user.getEmail());        // 预留
 
             return "redirect:/";  // POST-Redirect-GET 模式，防止刷新页面重复提交表单
