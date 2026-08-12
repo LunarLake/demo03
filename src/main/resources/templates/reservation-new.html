@@ -4,8 +4,8 @@
     <th:block
       th:replace="~{fragments/common-head :: head('预约会议室')}"
     ></th:block>
-    <script src="https://cdn.jsdelivr.net/npm/echarts@6.0.0/dist/echarts.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js"></script>
+    <script src="/vendor/echarts/echarts.min.js"></script>
+    <script src="/vendor/axios/axios.min.js"></script>
   </head>
   <body class="d-flex">
     <th:block th:replace="~{fragments/sidebar :: sidebar}"></th:block>
@@ -49,6 +49,16 @@
 
         <div class="card summary-card mb-3">
           <div class="card-body">
+            <div
+              id="scheduleError"
+              class="alert alert-danger d-none mb-0"
+              role="alert"
+            >
+              日程数据加载失败，请检查网络后
+              <a href="javascript:location.reload()" class="alert-link"
+                >刷新重试</a
+              >
+            </div>
             <div id="timelineChart" style="height: 200px"></div>
           </div>
           <div class="card-footer text-muted small">

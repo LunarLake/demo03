@@ -341,9 +341,15 @@ function loadSchedule() {
     .then(function (res) {
       scheduleData = res.data; // 更新全局 scheduleData
       refreshChart(); // 重新渲染甘特图
+      // 加载成功 → 隐藏错误提示
+      var errBox = document.getElementById("scheduleError");
+      if (errBox) errBox.classList.add("d-none");
     })
     .catch(function (err) {
       console.error(err); // 网络异常等情况下打印错误
+      // 页面显示友好提示，避免用户面对空白图表不知所措
+      var errBox = document.getElementById("scheduleError");
+      if (errBox) errBox.classList.remove("d-none");
     });
 }
 
