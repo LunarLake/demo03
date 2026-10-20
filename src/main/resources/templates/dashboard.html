@@ -45,7 +45,12 @@
           <div class="col-12 col-lg-6">
             <div class="card summary-card">
               <div class="card-header bg-white border-0">
-                <h2 class="h5 mb-0">签到率统计</h2>
+                <h2 class="h5 mb-0">
+                  预约出勤分布
+                  <small class="text-muted fw-normal fs-6"
+                    >（出勤率 = 已签到 /（已签到 + 缺席·爽约））</small
+                  >
+                </h2>
               </div>
               <div class="card-body">
                 <div id="attendanceChart" class="chart-container"></div>
@@ -172,7 +177,7 @@
         document.getElementById("attendanceChart"),
       );
       var attendanceOption = {
-        title: { text: "签到率统计", left: "center" },
+        title: { text: "预约出勤分布", left: "center" },
         tooltip: { trigger: "item" },
         series: [
           {

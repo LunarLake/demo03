@@ -128,13 +128,14 @@ public class LogController {
     }
 
     // ====================================================================
-    // GET /api/report-attendance-rate —— 签到出勤率统计（JSON API）
+    // GET /api/report-attendance-rate —— 预约出勤分布统计（JSON API）
     // ====================================================================
-    // 统计所有已批准的预约中，已签到 vs 未签到的比例。
+    // 从预约出发分类统计，而不是从签到表出发 —— v2 未签到是"没有签到记录"，
+    // 若按签到表统计会把所有爽约漏掉（BUG-007）。
     //
-    // 底层 SQL（AttendanceRecordMapper.countAttendanceRate）：
-    //   按 attend_status 分组统计（0=未签到，1=已签到），
-    //   前端用 ECharts 饼图渲染。
+    // 底层 SQL（AttendanceRecordMapper.countAttendanceRate）返回 6 类：
+    //   已签到 / 缺席（爽约）/ 主动取消 / 待审超时 / 已拒绝 / 待定（未到期）
+    // 前端用 ECharts 饼图渲染；出勤率只看前两类之和。
     @ResponseBody
     @GetMapping("/api/report-attendance-rate")
     public ApiResponse<List<Map<String, Object>>> reportAttendanceRate() {
