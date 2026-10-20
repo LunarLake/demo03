@@ -99,3 +99,85 @@ body.sidebar-collapsed .sidebar .nav-link {
 body.sidebar-collapsed .sidebar .nav-link i {
     font-size: 1.15rem;
 }
+
+/* =============================================================
+ * 移动端适配（P6-T05）
+ * -------------------------------------------------------------
+ * 手机是主要入口（学生站在门口用手机签到），因此窄屏下：
+ *   1. 侧边栏改为抽屉，默认收起，点击遮罩关闭
+ *   2. 内容区占满宽度，不再为侧边栏留 margin
+ *   3. 表格强制横向滚动，避免挤压成两三列
+ *   4. 触控目标不小于 40px
+ * ============================================================= */
+@media (max-width: 767.98px) {
+    .sidebar {
+        position: fixed;
+        top: 0;
+        left: 0;
+        height: 100%;
+        width: 78vw;
+        max-width: 300px;
+        transform: translateX(-102%);
+        transition: transform 0.22s ease;
+        z-index: 1045;
+        box-shadow: 2px 0 16px rgba(0, 0, 0, 0.25);
+    }
+
+    /* 抽屉打开 */
+    body.sidebar-open .sidebar {
+        transform: translateX(0);
+    }
+
+    /* 遮罩：点击任意空白处关闭抽屉 */
+    body.sidebar-open::after {
+        content: "";
+        position: fixed;
+        inset: 0;
+        background: rgba(15, 23, 42, 0.45);
+        z-index: 1040;
+    }
+
+    /* 手机上"折叠"没有意义，一律占满 */
+    .content-area,
+    body.sidebar-collapsed .content-area {
+        margin-left: 0;
+    }
+
+    body.sidebar-collapsed .sidebar {
+        width: 78vw;
+    }
+
+    body.sidebar-collapsed .menu-text {
+        display: inline;
+    }
+
+    body.sidebar-collapsed .sidebar .nav-link {
+        justify-content: flex-start;
+        padding-inline: 0.9rem;
+    }
+
+    /* 表格：允许横向滑动，不要被压扁 */
+    .table-responsive {
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+    }
+
+    .table-responsive > .table {
+        min-width: 640px;
+    }
+
+    /* 触控友好 */
+    .btn-sm {
+        padding: 0.3rem 0.6rem;
+        min-height: 34px;
+    }
+
+    .sidebar .nav-link {
+        min-height: 44px;
+    }
+
+    .container-fluid {
+        padding-left: 0.6rem !important;
+        padding-right: 0.6rem !important;
+    }
+}

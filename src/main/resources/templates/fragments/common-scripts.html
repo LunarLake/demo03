@@ -2,32 +2,60 @@
   <script src="/vendor/bootstrap/bootstrap.bundle.min.js"></script>
   <script>
     const COLLAPSED = "sidebar-collapsed";
+    const OPEN = "sidebar-open";
     const toggleBtn = document.getElementById("sidebarToggle");
     const toggleIcon = document.getElementById("sidebarToggleIcon");
     const menuLinks = document.querySelectorAll(".sidebar-menu .nav-link");
 
+    // 手机上是"抽屉"，桌面是"折叠"。两者语义不同，不能共用一套 class
+    const isMobile = () => window.matchMedia("(max-width: 767.98px)").matches;
+
     const syncIcon = () => {
-      toggleIcon.className = document.body.classList.contains(COLLAPSED)
+      if (!toggleIcon) return;
+      const active = isMobile()
+        ? document.body.classList.contains(OPEN)
+        : document.body.classList.contains(COLLAPSED);
+      toggleIcon.className = active
         ? "bi bi-layout-sidebar"
         : "bi bi-layout-sidebar-inset";
     };
 
-    if (localStorage.getItem(COLLAPSED) === "1")
+    if (localStorage.getItem(COLLAPSED) === "1" && !isMobile())
       document.body.classList.add(COLLAPSED);
     syncIcon();
 
-    toggleBtn.addEventListener("click", () => {
-      const collapsed = document.body.classList.toggle(COLLAPSED);
-      localStorage.setItem(COLLAPSED, +collapsed);
+    if (toggleBtn) {
+      toggleBtn.addEventListener("click", () => {
+        if (isMobile()) {
+          document.body.classList.toggle(OPEN);
+        } else {
+          const collapsed = document.body.classList.toggle(COLLAPSED);
+          localStorage.setItem(COLLAPSED, +collapsed);
+        }
+        syncIcon();
+      });
+    }
+
+    // 点击抽屉以外区域时关闭
+    document.addEventListener("click", (event) => {
+      if (!document.body.classList.contains(OPEN)) return;
+      if (event.target.closest(".sidebar") || event.target.closest("#sidebarToggle")) return;
+      document.body.classList.remove(OPEN);
       syncIcon();
     });
 
-    const currentFile = location.pathname.split("/").pop() || "index.html";
+    // 拉宽窗口时清掉抽屉状态，避免残留在桌面布局上
+    window.addEventListener("resize", () => {
+      if (!isMobile() && document.body.classList.contains(OPEN)) {
+        document.body.classList.remove(OPEN);
+      }
+      syncIcon();
+    });
+
+    const currentPath = location.pathname.replace(/\/$/, "");
     menuLinks.forEach((link) => {
-      const linkFile = link.getAttribute("href").split("/").pop();
-      const isActive =
-        linkFile === currentFile ||
-        (currentFile === "" && linkFile === "index.html");
+      const href = link.getAttribute("href").replace(/\/$/, "");
+      const isActive = href === currentPath;
       link.classList.toggle("active", isActive);
       isActive
         ? link.setAttribute("aria-current", "page")

@@ -14,6 +14,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 /**
@@ -55,7 +56,7 @@ class WebPagesSmokeTest {
     @Test
     @DisplayName("学生端主要页面都能渲染")
     void studentPagesRender() throws Exception {
-        String[] pages = {"/", "/rooms", "/my-reservations", "/credit", "/appeal", "/profile"};
+        String[] pages = {"/", "/rooms", "/reservation/board", "/my-reservations", "/credit", "/appeal", "/profile"};
         for (String page : pages) {
             mvc.perform(get(page).session(studentSession))
                     .andExpect(status().isOk());
@@ -74,7 +75,8 @@ class WebPagesSmokeTest {
     @Test
     @DisplayName("管理端页面都能渲染")
     void adminPagesRender() throws Exception {
-        String[] pages = {"/reservation/approve-list", "/appeal/review", "/admin/rules", "/admin/logs"};
+        String[] pages = {"/reservation/approve-list", "/appeal/review", "/admin/rules",
+                "/admin/devices", "/admin/logs"};
         for (String page : pages) {
             mvc.perform(get(page).session(adminSession))
                     .andExpect(status().isOk());
@@ -89,6 +91,22 @@ class WebPagesSmokeTest {
                 .andExpect(content().string(org.hamcrest.Matchers.containsString("MANUAL_REVIEW_HEADCOUNT")))
                 .andExpect(content().string(org.hamcrest.Matchers.containsString("AUTO_APPROVE_CREDIT")))
                 .andExpect(content().string(org.hamcrest.Matchers.containsString("版本历史")));
+    }
+
+    @Test
+    @DisplayName("排期板接口：2 个房间 × 56 格，状态字段可直接被前端消费")
+    void boardApiReturnsFullGrid() throws Exception {
+        String tomorrow = java.time.LocalDate.now().plusDays(1).toString();
+
+        mvc.perform(get("/api/room-board").param("date", tomorrow).session(studentSession))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success").value(true))
+                .andExpect(jsonPath("$.data.slotsPerDay").value(56))
+                .andExpect(jsonPath("$.data.unitMinutes").value(15))
+                .andExpect(jsonPath("$.data.rooms.length()").value(2))
+                .andExpect(jsonPath("$.data.rooms[0].slots.length()").value(56))
+                .andExpect(jsonPath("$.data.rooms[0].slots[0].state").isString())
+                .andExpect(jsonPath("$.data.rooms[0].slots[0].actionable").isBoolean());
     }
 
     @Test

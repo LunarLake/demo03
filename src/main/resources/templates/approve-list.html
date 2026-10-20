@@ -41,6 +41,7 @@
                   <th>人数/容量</th>
                   <th>开始时间</th>
                   <th>结束时间</th>
+                  <th>为什么进人工</th>
                   <th>操作</th>
                 </tr>
               </thead>
@@ -71,6 +72,20 @@
                   <td
                     th:text="${#strings.substring(a['end_time'].toString(), 0, 16)}"
                   ></td>
+                  <td class="small">
+                    <!-- 管理员要能直接看到"这笔为什么没被自动通过"，而不是去猜 -->
+                    <span
+                      class="badge bg-secondary"
+                      th:text="${a['hit_rule_codes'] != null ? a['hit_rule_codes'] : a['decision_path']}"
+                      >E01_HEADCOUNT</span
+                    >
+                    <div
+                      class="text-muted mt-1"
+                      th:if="${a['attendee_count'] != null and a.capacity != null and a['attendee_count'] >= 5}"
+                    >
+                      人数达阈值的申请一律转人工
+                    </div>
+                  </td>
                   <td>
                     <div class="d-flex gap-2">
                       <button

@@ -6,6 +6,7 @@ import com.wyc.demo03.entity.MeetingRoom;
 import com.wyc.demo03.entity.Reservation;
 import com.wyc.demo03.service.AccessService;
 import com.wyc.demo03.service.MeetingRoomService;
+import com.wyc.demo03.service.RoomBoardService;
 import com.wyc.demo03.service.ReservationService;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpSession;
@@ -38,13 +39,82 @@ public class ReservationController {
     private final ReservationService reservationService;
     private final MeetingRoomService meetingRoomService;
     private final AccessService accessService;
+    private final RoomBoardService roomBoardService;
 
     public ReservationController(ReservationService reservationService,
                                  MeetingRoomService meetingRoomService,
-                                 AccessService accessService) {
+                                 AccessService accessService,
+                                 RoomBoardService roomBoardService) {
         this.reservationService = reservationService;
         this.meetingRoomService = meetingRoomService;
         this.accessService = accessService;
+        this.roomBoardService = roomBoardService;
+    }
+
+    // ====================================================================
+    // 排期板
+    // ====================================================================
+    /**
+     * 预约主界面：2 个房间 × 56 个单元一次取全。
+     *
+     * @param date 为空表示今天
+     */
+    @GetMapping("/reservation/board")
+    public String board(@RequestParam(required = false) String date, Model model, HttpSession session) {
+        LocalDate day = parseDate(date);
+        model.addAttribute("date", day.toString());
+        model.addAttribute("today", LocalDate.now().toEpochDay() == day.toEpochDay());
+        model.addAttribute("prevDate", day.minusDays(1).toString());
+        model.addAttribute("nextDate", day.plusDays(1).toString());
+        return "board";
+    }
+
+    /** 排期板数据。所有房间所有单元一次返回，前端只渲染。 */
+    @ResponseBody
+    @GetMapping("/api/room-board")
+    public ApiResponse<RoomBoardService.Board> roomBoard(@RequestParam(required = false) String date,
+                                                         HttpSession session) {
+        Long userId = (Long) session.getAttribute("Id");
+        return ApiResponse.ok(roomBoardService.build(parseDate(date), userId));
+    }
+
+    /**
+     * 排期板提交入口（JSON）。
+     *
+     * <p>与 {@link #apply} 共用同一个 Service 判断，只是返回结构不同：
+     * 表单提交要重定向 + flash，排期板要就地显示失败原因而不刷新页面。
+     * 不复用表单端点是为了不让前端去猜"重定向后的页面里哪句话是错误"。
+     */
+    @ResponseBody
+    @PostMapping("/api/reservation/apply")
+    public ApiResponse<Map<String, Object>> applyApi(@Valid Reservation form, BindingResult bindingResult,
+                                                     HttpSession session) {
+        if (bindingResult.hasErrors()) {
+            return ApiResponse.fail("请填写完整的预约信息");
+        }
+        Long userId = (Long) session.getAttribute("Id");
+        String role = (String) session.getAttribute("role");
+        ReservationService.SubmitResult result = reservationService.submit(form, userId, role);
+        if (!result.accepted()) {
+            return ApiResponse.fail(result.message());
+        }
+        Map<String, Object> data = new java.util.HashMap<>();
+        data.put("reservationId", result.reservationId());
+        data.put("status", result.status() == null ? null : result.status().name());
+        data.put("checkInCode", result.checkInCode());
+        data.put("message", result.message());
+        return ApiResponse.ok(data);
+    }
+
+    private LocalDate parseDate(String date) {
+        if (date == null || date.isBlank()) {
+            return LocalDate.now();
+        }
+        try {
+            return LocalDate.parse(date);
+        } catch (RuntimeException e) {
+            return LocalDate.now();
+        }
     }
 
     // ====================================================================
@@ -140,18 +210,15 @@ public class ReservationController {
     // ====================================================================
     // 预约页与日程数据
     // ====================================================================
+    /**
+     * 旧的分房间预约页已由排期板取代（P6-T02）。
+     *
+     * <p>保留这条路由做重定向，是为了不让收藏夹里的旧链接 404；
+     * 直接删掉会得到一个白页 404，用户不知道去哪里预约。
+     */
     @GetMapping("/reservation/new")
-    public String newReservation(@RequestParam Long roomId, Model model, RedirectAttributes ra) {
-        MeetingRoom room = meetingRoomService.getById(roomId);
-        if (room == null) {
-            return fail(ra, "房间不存在！", "/rooms");
-        }
-        if (Integer.valueOf(1).equals(room.getRoomStatus())) {
-            return fail(ra, "该房间正在维护中，暂无法预约！", "/rooms");
-        }
-        model.addAttribute("roomId", roomId);
-        model.addAttribute("roomName", room.getRoomName());
-        return "reservation-new";
+    public String newReservation(@RequestParam(required = false) Long roomId) {
+        return "redirect:/reservation/board";
     }
 
     /**

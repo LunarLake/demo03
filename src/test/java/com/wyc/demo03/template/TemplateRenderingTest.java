@@ -117,12 +117,19 @@ class TemplateRenderingTest {
     }
 
     @Test
-    void reservationPageRendersSelectionMessageAndStatusLegend() {
-        String html = engine().process("reservation-new",
-                context("STUDENT", model("roomId", 1L, "roomName", "会议室A")));
-        assertTrue(html.contains("selectionMessage"), "需要可感知的选择状态提示区域");
-        assertTrue(html.contains("待审批占用"), "图例必须说明待审批占用");
-        assertTrue(html.contains("管理员预约"), "图例不能把管理员预约并入学生颜色");
+    @DisplayName("排期板渲染：图例、网格容器、底部操作栏都在")
+    void boardRendersShellAndLegend() {
+        String html = engine().process("board", context("STUDENT",
+                model("date", "2026-10-21", "today", false,
+                        "prevDate", "2026-10-20", "nextDate", "2026-10-22")));
+
+        assertTrue(html.contains("data-board"), "需要给前端一个挂载点");
+        assertTrue(html.contains("id=\"boardGrid\""), "网格容器必须存在");
+        assertTrue(html.contains("可预约"), "图例必须说明可预约颜色");
+        assertTrue(html.contains("有人待审批"), "图例必须区分「有人待审」，否则用户以为选不了");
+        assertTrue(html.contains("我的预约"), "我的预约要单独一个颜色");
+        assertTrue(html.contains("提交预约"), "底部操作栏必须可直接提交");
+        assertTrue(html.contains("board.js"), "排期逻辑在独立脚本里");
     }
 
     // ==================== P3 新增页面 ====================

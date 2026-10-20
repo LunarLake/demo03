@@ -8,6 +8,7 @@ import org.apache.ibatis.annotations.Select;
 import org.apache.ibatis.annotations.Update;
 
 import java.time.LocalDateTime;
+import java.util.List;
 
 @Mapper
 public interface DeviceMapper extends BaseMapper<Device> {
@@ -22,6 +23,14 @@ public interface DeviceMapper extends BaseMapper<Device> {
     /** 心跳：更新时刻并置在线。 */
     @Update("UPDATE t_device SET last_heartbeat_at = #{at}, online = 1 WHERE device_code = #{deviceCode}")
     int touchHeartbeat(@Param("deviceCode") String deviceCode, @Param("at") LocalDateTime at);
+
+    /** 设备列表：带房间名，管理端页面用。 */
+    @Select("SELECT d.id, d.device_code AS deviceCode, d.room_id AS roomId, "
+            + "       m.room_name AS roomName, d.firmware_ver AS firmwareVer, "
+            + "       d.last_heartbeat_at AS lastHeartbeatAt, d.online "
+            + "FROM t_device d LEFT JOIN t_meeting_room m ON m.id = d.room_id "
+            + "ORDER BY d.id")
+    List<java.util.Map<String, Object>> findAllWithRoom();
 
     /** 心跳看门狗：超时未心跳的置离线，返回受影响行数。 */
     @Update("UPDATE t_device SET online = 0 WHERE online = 1 AND last_heartbeat_at < #{deadline}")

@@ -4,6 +4,7 @@ import com.wyc.demo03.entity.User;
 import com.wyc.demo03.service.AttendanceRecordService;
 import com.wyc.demo03.service.LoginAttemptService;
 import com.wyc.demo03.service.AccessService;
+import com.wyc.demo03.service.RoomBoardService;
 import com.wyc.demo03.service.MeetingRoomService;
 import com.wyc.demo03.service.ReservationService;
 import com.wyc.demo03.service.UserService;
@@ -43,6 +44,8 @@ class ControllerLayerTest {
     @Mock
     private AccessService accessService;
     @Mock
+    private RoomBoardService roomBoardService;
+    @Mock
     private AttendanceRecordService attendanceRecordService;
     @Mock
     private ReservationService reservationService;
@@ -55,7 +58,7 @@ class ControllerLayerTest {
     void setUp() {
         MainController mainController = new MainController(userService, meetingRoomService,
                 attendanceRecordService, reservationService, loginAttemptService);
-        ReservationController reservationController = new ReservationController(reservationService, meetingRoomService, accessService);
+        ReservationController reservationController = new ReservationController(reservationService, meetingRoomService, accessService, roomBoardService);
         RoomController roomController = new RoomController(meetingRoomService, reservationService);
         com.wyc.demo03.service.LogService logService = org.mockito.Mockito.mock(com.wyc.demo03.service.LogService.class);
         org.mockito.Mockito.lenient().when(logService.list()).thenReturn(java.util.List.of());
@@ -376,43 +379,24 @@ class ControllerLayerTest {
     }
 
     @Test
-    void newReservationRedirectsWhenRoomMissing() throws Exception {
-        // Arrange
-        when(meetingRoomService.getById(99L)).thenReturn(null);
-
-        // Act & Assert
-        mockMvc.perform(get("/reservation/new").param("roomId", "99"))
+    @DisplayName("旧的 /reservation/new 一律重定向到排期板（房间校验已在排期板里做）")
+    void legacyNewReservationRedirectsToBoard() throws Exception {
+        mockMvc.perform(get("/reservation/new").param("roomId", "1"))
                 .andExpect(status().is3xxRedirection())
-                .andExpect(redirectedUrl("/rooms"));
+                .andExpect(redirectedUrl("/reservation/board"));
+
+        // 不带 roomId 也要能跳，避免收藏夹旧链接 500
+        mockMvc.perform(get("/reservation/new"))
+                .andExpect(status().is3xxRedirection())
+                .andExpect(redirectedUrl("/reservation/board"));
     }
 
     @Test
-    void newReservationRedirectsWhenRoomUnderMaintenance() throws Exception {
-        // Arrange
-        com.wyc.demo03.entity.MeetingRoom room = new com.wyc.demo03.entity.MeetingRoom();
-        room.setId(1L);
-        room.setRoomStatus(1);
-        when(meetingRoomService.getById(1L)).thenReturn(room);
-
-        // Act & Assert
-        mockMvc.perform(get("/reservation/new").param("roomId", "1"))
-                .andExpect(status().is3xxRedirection())
-                .andExpect(redirectedUrl("/rooms"));
-    }
-
-    @Test
-    void newReservationRendersWhenRoomAvailable() throws Exception {
-        // Arrange
-        com.wyc.demo03.entity.MeetingRoom room = new com.wyc.demo03.entity.MeetingRoom();
-        room.setId(1L);
-        room.setRoomName("大会议室");
-        room.setRoomStatus(0);
-        when(meetingRoomService.getById(1L)).thenReturn(room);
-
-        // Act & Assert
-        mockMvc.perform(get("/reservation/new").param("roomId", "1"))
+    @DisplayName("排期板页面可打开")
+    void boardPageRenders() throws Exception {
+        mockMvc.perform(get("/reservation/board"))
                 .andExpect(status().isOk())
-                .andExpect(view().name("reservation-new"));
+                .andExpect(view().name("board"));
     }
 
     @Test
@@ -450,7 +434,7 @@ class ControllerLayerTest {
 
         mockMvc = MockMvcBuilders.standaloneSetup(
                         new MainController(userService, meetingRoomService, attendanceRecordService, reservationService, loginAttemptService),
-                        new ReservationController(reservationService, meetingRoomService, accessService),
+                        new ReservationController(reservationService, meetingRoomService, accessService, roomBoardService),
                         new RoomController(meetingRoomService, reservationService),
                         new LogController(logService, reservationService, attendanceRecordService))
                 .setViewResolvers(new InternalResourceViewResolver("/WEB-INF/views/", ".html"))

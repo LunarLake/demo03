@@ -155,6 +155,19 @@ public interface ReservationMapper extends BaseMapper<Reservation> {
     List<Map<String, Object>> findPendingOnDate(@Param("dayStart") LocalDateTime dayStart,
                                                 @Param("dayEnd") LocalDateTime dayEnd);
 
+    /**
+     * 某日仍在进行中的预约（待审批 / 已通过 / 已签到），按开始时间升序。
+     *
+     * <p>排期板用它区分"我的"与"别人的"：占用表里只有 reservationId，
+     * 要判断归属还得回到预约表。一次取全天而不是逐格查，避免 112 次查询。
+     */
+    @Select("SELECT * FROM t_reservation "
+            + "WHERE reservation_status IN (0, 1, 6) "
+            + "  AND start_time < #{dayEnd} AND end_time > #{dayStart} "
+            + "ORDER BY start_time")
+    List<Reservation> findActiveOnDate(@Param("dayStart") LocalDateTime dayStart,
+                                       @Param("dayEnd") LocalDateTime dayEnd);
+
     /** 预约详情：含房间、申请人、签到记录、签到码。 */
     @Select("SELECT r.*, u.name AS userName, u.role AS userRole, m.room_name AS roomName, m.capacity AS capacity, "
             + "       ar.attend_status, ar.check_in_time AS checkInTime, ar.ip AS checkInIp, "

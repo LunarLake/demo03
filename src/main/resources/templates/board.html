@@ -1,0 +1,113 @@
+<!doctype html>
+<html xmlns:th="http://www.thymeleaf.org">
+  <head>
+    <th:block th:replace="~{fragments/common-head :: head('预约排期')}"></th:block>
+    <link rel="stylesheet" th:href="@{/board.css}" />
+    <meta name="_csrf" th:content="${_csrf}" />
+  </head>
+  <body class="d-flex">
+    <th:block th:replace="~{fragments/sidebar :: sidebar}"></th:block>
+    <main class="content-area flex-grow-1">
+      <th:block th:replace="~{fragments/header :: header('预约排期')}"></th:block>
+
+      <section class="container-fluid py-3 px-2 px-md-4 board-shell" data-board th:attr="data-date=${date}">
+        <!-- 日期切换 -->
+        <div class="d-flex flex-wrap align-items-center gap-2 mb-2">
+          <div class="btn-group btn-group-sm" role="group" aria-label="切换日期">
+            <a class="btn btn-outline-secondary" th:href="@{/reservation/board(date=${prevDate})}">
+              <i class="bi bi-chevron-left"></i>
+            </a>
+            <button type="button" class="btn btn-outline-secondary" id="btnToday">今天</button>
+            <a class="btn btn-outline-secondary" th:href="@{/reservation/board(date=${nextDate})}">
+              <i class="bi bi-chevron-right"></i>
+            </a>
+          </div>
+          <form method="get" th:action="@{/reservation/board}" class="d-flex align-items-center gap-1">
+            <input
+              type="date"
+              name="date"
+              id="datePicker"
+              class="form-control form-control-sm"
+              style="width: 150px"
+              th:value="${date}"
+            />
+            <button class="btn btn-sm btn-primary" type="submit">查看</button>
+          </form>
+          <span class="text-muted small ms-auto d-none d-md-inline">
+            点第一格选开始，点第二格选结束
+          </span>
+        </div>
+
+        <!-- 图例 -->
+        <div class="mb-2 d-flex flex-wrap align-items-center">
+          <span class="legend-chip"><i class="legend-swatch" style="background:#ecfdf5;border-color:#d1fae5"></i>可预约</span>
+          <span class="legend-chip"><i class="legend-swatch" style="background:#fffbeb;border-color:#fde68a;border-style:dashed"></i>有人待审批</span>
+          <span class="legend-chip"><i class="legend-swatch" style="background:#e5e7eb;border-color:#d1d5db"></i>已占用</span>
+          <span class="legend-chip"><i class="legend-swatch" style="background:#bbf7d0;border-color:#22c55e"></i>我的预约</span>
+          <span class="legend-chip"><i class="legend-swatch" style="background:#fef3c7;border-color:#f59e0b"></i>我的待审</span>
+          <span class="legend-chip"><i class="legend-swatch" style="background:#f9fafb;border-color:#f3f4f6"></i>已过去</span>
+        </div>
+
+        <!-- 排期网格 -->
+        <div class="board-scroll">
+          <div class="board-grid" id="boardGrid" aria-label="房间排期表"></div>
+        </div>
+
+        <div id="boardError" class="alert alert-danger mt-2 d-none" role="alert"></div>
+
+        <!-- 底部操作栏 -->
+        <div class="board-action mt-3">
+          <div class="d-flex flex-wrap align-items-end gap-2">
+            <div class="flex-grow-1" style="min-width: 180px">
+              <div class="small text-muted">已选时段</div>
+              <div id="selText">
+                <span class="sel-empty">尚未选择（点上表任意可预约格开始）</span>
+              </div>
+            </div>
+            <div>
+              <label class="form-label small mb-0" for="attendeeCount">人数</label>
+              <input
+                type="number"
+                id="attendeeCount"
+                class="form-control form-control-sm"
+                style="width: 80px"
+                min="1"
+                max="99"
+                value="2"
+              />
+            </div>
+            <div>
+              <label class="form-label small mb-0" for="purpose">用途（低信用必填）</label>
+              <input
+                type="text"
+                id="purpose"
+                class="form-control form-control-sm"
+                style="width: 200px"
+                maxlength="200"
+                placeholder="如：小组讨论"
+              />
+            </div>
+            <button type="button" class="btn btn-primary btn-sm" id="btnSubmit" disabled>
+              提交预约
+            </button>
+            <button type="button" class="btn btn-outline-secondary btn-sm" id="btnClear" disabled>
+              清空
+            </button>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <!-- 轻提示 -->
+    <div
+      id="toast"
+      class="position-fixed start-50 translate-middle-x d-none"
+      style="bottom: 90px; z-index: 1080"
+    >
+      <div class="alert alert-dark shadow-sm py-2 px-3 mb-0" id="toastText"></div>
+    </div>
+
+    <th:block th:replace="~{fragments/common-scripts :: scripts}"></th:block>
+    <script th:src="@{/js/board.js}"></script>
+  </body>
+</html>

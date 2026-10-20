@@ -23,6 +23,12 @@
         </a>
       </li>
       <li class="nav-item">
+        <a class="nav-link" href="/reservation/board">
+          <i class="bi bi-grid-3x3-gap" aria-hidden="true"></i>
+          <span class="menu-text">预约排期</span>
+        </a>
+      </li>
+      <li class="nav-item">
         <a class="nav-link" href="/my-reservations">
           <i class="bi bi-calendar-check" aria-hidden="true"></i>
           <span class="menu-text">我的预约</span>
@@ -62,6 +68,12 @@
         <a class="nav-link" href="/admin/rules">
           <i class="bi bi-sliders" aria-hidden="true"></i>
           <span class="menu-text">审核规则</span>
+        </a>
+      </li>
+      <li class="nav-item" th:if="${session.role == 'ADMIN'}">
+        <a class="nav-link" href="/admin/devices">
+          <i class="bi bi-router" aria-hidden="true"></i>
+          <span class="menu-text">设备管理</span>
         </a>
       </li>
       <li class="nav-item" th:if="${session.role == 'ADMIN'}">
