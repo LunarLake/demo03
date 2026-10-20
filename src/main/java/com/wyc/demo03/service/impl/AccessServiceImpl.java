@@ -44,13 +44,13 @@ public class AccessServiceImpl implements AccessService {
         Reservation r = reservationMapper.selectById(reservationId);
         if (r == null || userId == null || !userId.equals(r.getUserId())) {
             // 预约不存在与不是本人，对外统一成"无权"，避免泄露预约号是否存在
-            record(r, userId, null, null, "NOT_OWNER");
+            record(r, userId, null, null, ip, "NOT_OWNER");
             return UnlockResult.deny("NOT_OWNER", "无权对该预约开门");
         }
 
         ReservationStatus status = r.statusOrNull();
         if (status != ReservationStatus.CHECKED_IN) {
-            record(r, userId, null, null, "STATUS_INVALID");
+            record(r, userId, null, null, ip, "STATUS_INVALID");
             if (status == ReservationStatus.APPROVED) {
                 return UnlockResult.deny("STATUS_INVALID", "请先完成首次签到，签到成功后会自动开门");
             }
@@ -59,11 +59,11 @@ public class AccessServiceImpl implements AccessService {
 
         LocalDateTime now = LocalDateTime.now(clock);
         if (now.isBefore(r.getStartTime())) {
-            record(r, userId, null, null, "OUT_OF_WINDOW");
+            record(r, userId, null, null, ip, "OUT_OF_WINDOW");
             return UnlockResult.deny("OUT_OF_WINDOW", "还未到预约开始时间");
         }
         if (!now.isBefore(r.getEndTime())) {
-            record(r, userId, null, null, "OUT_OF_WINDOW");
+            record(r, userId, null, null, ip, "OUT_OF_WINDOW");
             return UnlockResult.deny("OUT_OF_WINDOW", "预约已结束，门禁授权已撤销");
         }
 
@@ -72,15 +72,20 @@ public class AccessServiceImpl implements AccessService {
 
     @Override
     @Transactional(rollbackFor = Exception.class)
-    public UnlockResult openAfterCheckIn(Reservation reservation, Long userId, String ip) {
+    public UnlockResult openAfterCheckIn(Long reservationId, Long userId, String ip) {
+        Reservation reservation = reservationId == null ? null : reservationMapper.selectById(reservationId);
         if (reservation == null) {
             return UnlockResult.deny("STATUS_INVALID", "预约不存在");
         }
-        // 签到刚刚校验过归属与状态，这里只补一次时段校验（签到窗口在开始之后，必然成立，
-        // 但保留判断是为了防止"补签/手工改时间"等旁路绕过）
+        if (userId == null || !userId.equals(reservation.getUserId())) {
+            record(reservation, userId, null, null, null, "NOT_OWNER");
+            return UnlockResult.deny("NOT_OWNER", "无权对该预约开门");
+        }
+        // 签到刚刚校验过状态，这里补一次时段校验（签到窗口在开始之后必然成立，
+        // 保留判断是为了防止"补签/手工改时间"等旁路绕过）
         LocalDateTime now = LocalDateTime.now(clock);
         if (now.isBefore(reservation.getStartTime()) || !now.isBefore(reservation.getEndTime())) {
-            record(reservation, userId, null, null, "OUT_OF_WINDOW");
+            record(reservation, userId, null, null, null, "OUT_OF_WINDOW");
             return UnlockResult.deny("OUT_OF_WINDOW", "不在预约有效时段内，未下发开门指令");
         }
         return unlock(reservation, userId, ip, "FIRST_CHECKIN");
@@ -96,11 +101,11 @@ public class AccessServiceImpl implements AccessService {
     private UnlockResult unlock(Reservation r, Long userId, String ip, String reason) {
         Device device = deviceMapper.findByRoomId(r.getRoomId());
         if (device == null) {
-            record(r, userId, null, null, "DEVICE_OFFLINE");
+            record(r, userId, null, null, ip, "DEVICE_OFFLINE");
             return UnlockResult.deny("DEVICE_OFFLINE", "该房间尚未配置门禁设备，请联系管理员");
         }
         if (!doorController.reachable(device)) {
-            record(r, userId, device.getId(), null, "DEVICE_OFFLINE");
+            record(r, userId, device.getId(), null, ip, "DEVICE_OFFLINE");
             return UnlockResult.deny("DEVICE_OFFLINE", "门禁离线，请联系管理员或使用备用钥匙");
         }
 
@@ -114,6 +119,9 @@ public class AccessServiceImpl implements AccessService {
         if (dispatch == DispatchResult.ACKED) {
             // 只有"设备已确认"才结算 ACKED；SENT 必须等回执，否则会把没开锁说成开锁
             deviceCommandService.ack(command.getMsgId(), DeviceCommand.Status.ACKED, "OK");
+        } else if (dispatch == DispatchResult.FAILED) {
+            // 根本没发出去：立刻结算为 FAILED，不留一条"假 SENT"等到过期
+            deviceCommandService.ack(command.getMsgId(), DeviceCommand.Status.FAILED, "DISPATCH_FAILED");
         } else if (dispatch == DispatchResult.SENT) {
             // 回执可能在 dispatch 返回前就到了（进程内总线、或设备响应极快）。
             // 回查一次库：状态确实变成 ACKED 才对外声称已开锁，否则如实说"等待确认"。
@@ -124,7 +132,7 @@ public class AccessServiceImpl implements AccessService {
         }
 
         // 已授权就记 granted=1：即使回执还没到，"服务端已放行"这个事实也要留痕
-        record(r, userId, device.getId(), command.getId(), null);
+        record(r, userId, device.getId(), command.getId(), ip, null);
 
         return switch (dispatch) {
             case ACKED -> UnlockResult.granted(command.getMsgId(), "ACKED", "门禁已开锁，请推门进入");
@@ -150,11 +158,13 @@ public class AccessServiceImpl implements AccessService {
                 + ";pulseMs=3000";
     }
 
-    /** 写一条开门记录；granted 由 denyReason 是否为空决定。 */
-    private void record(Reservation r, Long userId, Long deviceId, Long commandId, String denyReason) {
+    /** 写一条开门记录；granted 由 denyReason 是否为空决定。IP 一律落库，便于事后追溯是谁在哪个终端点的。 */
+    private void record(Reservation r, Long userId, Long deviceId, Long commandId,
+                        String ip, String denyReason) {
         AccessLog entry = new AccessLog();
         entry.setReservationId(r == null ? null : r.getId());
         entry.setUserId(userId);
+        entry.setIp(ip);
         entry.setDeviceId(deviceId);
         entry.setCommandId(commandId);
         entry.setGranted(denyReason == null ? 1 : 0);

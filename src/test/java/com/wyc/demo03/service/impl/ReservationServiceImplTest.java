@@ -22,7 +22,6 @@ import com.wyc.demo03.rule.basic.NoActiveViolationRule;
 import com.wyc.demo03.rule.basic.SlotAlignmentRule;
 import com.wyc.demo03.rule.basic.SlotOccupiedRule;
 import com.wyc.demo03.device.DeviceNotifier;
-import com.wyc.demo03.service.AccessService;
 import com.wyc.demo03.service.AttendanceRecordService;
 import com.wyc.demo03.service.CheckinCodeService;
 import com.wyc.demo03.service.CreditService;
@@ -82,7 +81,6 @@ class ReservationServiceImplTest {
     @Mock private SlotService slotService;
     @Mock private CheckinCodeService checkinCodeService;
     @Mock private CreditService creditService;
-    @Mock private AccessService accessService;
     @Mock private DeviceNotifier deviceNotifier;
     @Mock private AuditLogMapper auditLogMapper;
 
@@ -108,7 +106,7 @@ class ReservationServiceImplTest {
 
         service = new ReservationServiceImpl(attendanceRecordService, meetingRoomService, userService,
                 slotService, checkinCodeService, creditService, engine, schema, properties,
-                auditLogMapper, clock, accessService, deviceNotifier);
+                auditLogMapper, clock, deviceNotifier);
         ReflectionTestUtils.setField(service, "baseMapper", reservationMapper);
 
         room = new MeetingRoom();
@@ -130,9 +128,6 @@ class ReservationServiceImplTest {
         lenient().when(slotService.findOccupied(anyLong(), anyList())).thenReturn(List.of());
         lenient().when(creditService.scoreOf(anyLong())).thenReturn(100);
         lenient().when(checkinCodeService.issue(anyLong())).thenReturn("1234");
-        // 默认门禁正常回执；个别用例再覆盖成失败
-        lenient().when(accessService.openAfterCheckIn(any(), anyLong(), any()))
-                .thenReturn(AccessService.UnlockResult.granted("msg-1", "ACKED", "门禁已开锁"));
         lenient().when(meetingRoomService.getById(1L)).thenReturn(room);
     }
 
@@ -674,31 +669,17 @@ class ReservationServiceImplTest {
         }
 
         @Test
-        @DisplayName("AC-15 签到成功但门禁离线：签到不回滚，如实返回 success_door_failed")
-        void doorDeniedDoesNotRollbackCheckIn() {
+        @DisplayName("BUG-004 签到事务内不下发开门指令：设备动作必须等签到提交之后")
+        void checkInDoesNotTouchDoor() {
             clock.set(T0);
             stubExisting(approvedAt(T0.minusMinutes(1)));
             when(checkinCodeService.verify(1L, "1234")).thenReturn(true);
             when(reservationMapper.transit(anyLong(), anyInt(), anyInt(), any(), any(), any())).thenReturn(1);
-            when(accessService.openAfterCheckIn(any(), anyLong(), any()))
-                    .thenReturn(AccessService.UnlockResult.deny("DEVICE_OFFLINE", "门禁离线"));
 
-            assertEquals("success_door_failed", service.checkIn(1L, 7L, "1234", "127.0.0.1"));
+            assertEquals("success", service.checkIn(1L, 7L, "1234", "127.0.0.1"),
+                    "签到只负责落库，返回码不再带门禁后缀");
             verify(attendanceRecordService).save(any());
-        }
-
-        @Test
-        @DisplayName("AC-15 开门过程抛异常也不能影响签到结果")
-        void doorExceptionDoesNotRollbackCheckIn() {
-            clock.set(T0);
-            stubExisting(approvedAt(T0.minusMinutes(1)));
-            when(checkinCodeService.verify(1L, "1234")).thenReturn(true);
-            when(reservationMapper.transit(anyLong(), anyInt(), anyInt(), any(), any(), any())).thenReturn(1);
-            when(accessService.openAfterCheckIn(any(), anyLong(), any()))
-                    .thenThrow(new IllegalStateException("mqtt down"));
-
-            assertEquals("success_door_failed", service.checkIn(1L, 7L, "1234", "127.0.0.1"));
-            verify(attendanceRecordService).save(any());
+            // 事务内不得调用 AccessService —— 否则可能出现"门开了但签到回滚"
         }
     }
 

@@ -23,7 +23,6 @@ import com.wyc.demo03.entity.User;
 import com.wyc.demo03.mapper.AuditLogMapper;
 import com.wyc.demo03.mapper.ReservationMapper;
 import com.wyc.demo03.rule.RuleEngine;
-import com.wyc.demo03.service.AccessService;
 import com.wyc.demo03.service.AttendanceRecordService;
 import com.wyc.demo03.service.CheckinCodeService;
 import com.wyc.demo03.service.CreditService;
@@ -84,7 +83,6 @@ public class ReservationServiceImpl extends ServiceImpl<ReservationMapper, Reser
     private final SlotProperties slotProperties;
     private final AuditLogMapper auditLogMapper;
     private final Clock clock;
-    private final AccessService accessService;
     private final DeviceNotifier deviceNotifier;
 
     /** 预约 ID → 签到码输错次数（内存版，单实例部署适用）。 */
@@ -397,30 +395,11 @@ public class ReservationServiceImpl extends ServiceImpl<ReservationMapper, Reser
         attendanceRecordService.save(record);
 
         audit("USER", AuditLog.Action.CHECKIN, reservationId, "首次签到成功");
-        // 先让屏幕切到"已签到"（顺带把当前预约绑定到该设备，供设备端做跨预约校验），再开门
         notifySnapshot(r, ReservationStatus.CHECKED_IN);
-        // 签到落库后再开锁：开锁失败不影响签到（文档 3.2.3），因此这里把异常全部吞掉
-        return openDoorAfterCheckIn(r, userId, ip);
-    }
-
-    /**
-     * 签到成功后的首次开门。
-     *
-     * <p>★ 关键取舍：开锁的任何失败都**不能**让签到回滚。学生已经到门口了，
-     * 因为门禁离线就取消签到、再判一次爽约，是最糟的体验。因此这里兜住所有异常。
-     */
-    private String openDoorAfterCheckIn(Reservation r, Long userId, String ip) {
-        try {
-            AccessService.UnlockResult result = accessService.openAfterCheckIn(r, userId, ip);
-            if (!result.granted()) {
-                log.warn("签到成功但开门被拒：reservation={} reason={}", r.getId(), result.denyReason());
-                return "success_door_failed";
-            }
-            return result.acknowledged() ? "success" : "success_door_pending";
-        } catch (RuntimeException e) {
-            log.error("签到成功但开门异常：reservation={}", r.getId(), e);
-            return "success_door_failed";
-        }
+        // ★ 开机指令不在这里下发（BUG-004）：本方法处于事务中，若此时发布设备指令，
+        //   可能出现"设备已经开锁、签到随后回滚"的不可逆错误。
+        //   由控制器在本事务提交之后调用 AccessService.openAfterCheckIn()。
+        return "success";
     }
 
     /** 签到窗口长度（分钟），来自 {@code app.slot.checkin-window-minutes}。 */

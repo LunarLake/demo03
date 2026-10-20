@@ -297,6 +297,13 @@ public class ReservationController {
         Long userId = (Long) session.getAttribute("Id");
         String result = reservationService.checkIn(reservationId, userId, code, request.getRemoteAddr());
 
+        // 签到事务已经提交，现在才允许下发开锁指令（BUG-004）。
+        // 开门失败/异常一律不影响签到结果，只是提示不同。
+        String doorOutcome = null;
+        if ("success".equals(result)) {
+            doorOutcome = openDoorAfterCheckIn(reservationId, userId, request.getRemoteAddr());
+        }
+
         model.addAttribute("reservationId", reservationId);
         // success_door_pending / success_door_failed 也属于"签到已完成"，不能再显示重试表单
         boolean finished = result.startsWith("success")
@@ -306,7 +313,11 @@ public class ReservationController {
         exposeCheckinPolicy(model);
         model.addAttribute("infoType", result.startsWith("success") ? "success" : "danger");
         model.addAttribute("info", switch (result) {
-            case "success" -> "签到成功！门禁已开锁，请推门进入。";
+            case "success" -> switch (doorOutcome == null ? "FAILED" : doorOutcome) {
+                case "ACKED" -> "签到成功！门禁已开锁，请推门进入。";
+                case "SENT" -> "签到成功！开门指令已下发，请稍候门禁确认。";
+                default -> "签到成功！但门禁未能开锁，请联系管理员或使用机械备用钥匙。";
+            };
             case "success_door_pending" -> "签到成功！开门指令已下发，请稍候门禁确认。";
             case "success_door_failed" -> "签到成功！但门禁未能开锁，请联系管理员或使用备用钥匙。";
             case "wrong_code" -> "签到码错误！";
@@ -317,6 +328,21 @@ public class ReservationController {
             default -> "签到失败！";
         });
         return "check-in";
+    }
+
+    /**
+     * 首次开门：只返回投递结果码，绝不抛异常影响签到结论。
+     */
+    private String openDoorAfterCheckIn(Long reservationId, Long userId, String ip) {
+        try {
+            AccessService.UnlockResult result = accessService.openAfterCheckIn(reservationId, userId, ip);
+            if (!result.granted()) {
+                return "FAILED";
+            }
+            return result.commandStatus();
+        } catch (RuntimeException e) {
+            return "FAILED";
+        }
     }
 
     /**

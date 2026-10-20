@@ -58,10 +58,13 @@ public interface AccessService {
     /**
      * 首次签到成功后的自动开门。
      *
-     * <p>不重复校验签到码（刚刚校验过），但仍然校验归属与时段。
-     * 调用方必须保证签到已完成落库。
+     * <p><b>必须由控制器在签到事务提交之后调用</b>（BUG-004）：如果放在签到事务内，
+     * 设备指令可能已经执行而签到随后回滚，出现"门开了但系统里没签到"。
+     * 因此这里只接收预约 id，实现方自行读取已提交的数据。
+     *
+     * <p>不重复校验签到码（刚刚校验过），但仍校验归属与时段。
      */
-    UnlockResult openAfterCheckIn(Reservation reservation, Long userId, String ip);
+    UnlockResult openAfterCheckIn(Long reservationId, Long userId, String ip);
 
     /** 某预约的开门记录，最新的在前。 */
     List<AccessLog> recentLogs(Long reservationId);

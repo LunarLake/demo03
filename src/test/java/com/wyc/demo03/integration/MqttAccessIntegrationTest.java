@@ -96,9 +96,12 @@ class MqttAccessIntegrationTest {
         Reservation r = insertApprovedNow();
 
         String result = reservationService.checkIn(r.getId(), student.getId(), "4321", "127.0.0.1");
+        assertEquals("success", result, "签到本身只落库");
 
-        assertTrue(result.startsWith("success"), "签到应成功，实际：" + result);
-        assertEquals("success", result, "进程内总线是同步的，回执应已到达，不应停在 pending");
+        // 控制器在签到提交后才下发指令（BUG-004）
+        var unlock = accessService.openAfterCheckIn(r.getId(), student.getId(), "127.0.0.1");
+        assertTrue(unlock.granted(), "应已授权下发");
+        assertTrue(unlock.acknowledged(), "进程内总线同步回执，应已 ACKED");
 
         List<DeviceCommand> cmds = commands(r.getId());
         assertEquals(1, cmds.size());
@@ -134,6 +137,7 @@ class MqttAccessIntegrationTest {
     void reopenThroughMqtt() {
         Reservation r = insertApprovedNow();
         reservationService.checkIn(r.getId(), student.getId(), "4321", "127.0.0.1");
+        accessService.openAfterCheckIn(r.getId(), student.getId(), "127.0.0.1");
 
         AccessService.UnlockResult again = accessService.reopen(r.getId(), student.getId(), "127.0.0.1");
 
@@ -166,8 +170,10 @@ class MqttAccessIntegrationTest {
         checkinCodeMapper.insert(code);
 
         String result = reservationService.checkIn(r.getId(), student.getId(), "4321", "127.0.0.1");
+        assertEquals("success", result, "签到本身只落库");
 
-        assertEquals("success_door_pending", result, "没有设备回执时必须如实说等待，不能谎报已开锁");
+        var unlock = accessService.openAfterCheckIn(r.getId(), student.getId(), "127.0.0.1");
+        assertEquals("SENT", unlock.commandStatus(), "没有设备回执时必须如实说等待，不能谎报已开锁");
         List<DeviceCommand> cmds = commands(r.getId());
         assertEquals(1, cmds.size());
         assertEquals("SENT", cmds.get(0).getStatus());

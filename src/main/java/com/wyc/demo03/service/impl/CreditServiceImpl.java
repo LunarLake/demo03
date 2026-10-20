@@ -69,6 +69,10 @@ public class CreditServiceImpl implements CreditService {
         if (userId == null || reason == null) {
             return false;
         }
+        // ★ 先串行化：同一用户的调整必须排队，否则两个事务各自 SUM 都会漏掉对方未提交的流水，
+        //   后写者用不完整总和覆盖缓存，分数偏高还会让不该通过的预约被自动放行。
+        creditAccountMapper.ensureAndLock(userId);
+
         LocalDateTime now = LocalDateTime.now(clock);
         int delta = deltaOverride != null ? deltaOverride : reason.defaultDelta();
 

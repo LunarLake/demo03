@@ -94,8 +94,11 @@ class AccessFlowIntegrationTest {
         Reservation r = insertApprovedNow();
 
         String result = reservationService.checkIn(r.getId(), student.getId(), "4321", "127.0.0.1");
+        assertEquals("success", result, "签到本身只落库，不含门禁语义");
 
-        assertEquals("success", result, "log 模式下模拟设备应立刻回执 OK");
+        // 控制器在事务提交后才做这一步（BUG-004）；这里模拟同样的编排
+        var unlock = accessService.openAfterCheckIn(r.getId(), student.getId(), "127.0.0.1");
+        assertTrue(unlock.granted(), "签到后应授权开门");
 
         List<DeviceCommand> cmds = commands(r.getId());
         assertEquals(1, cmds.size(), "签到应只下发一条开锁指令");
@@ -107,6 +110,7 @@ class AccessFlowIntegrationTest {
         assertEquals(1, accessLogs.size());
         assertEquals(1, accessLogs.get(0).getGranted());
         assertEquals(cmds.get(0).getId(), accessLogs.get(0).getCommandId());
+        assertEquals("127.0.0.1", accessLogs.get(0).getIp(), "BUG-014 开门日志必须落请求 IP");
     }
 
     @Test
@@ -124,6 +128,7 @@ class AccessFlowIntegrationTest {
         assertEquals(1, accessLogs.size());
         assertEquals(0, accessLogs.get(0).getGranted());
         assertEquals("STATUS_INVALID", accessLogs.get(0).getDenyReason());
+        assertEquals("127.0.0.1", accessLogs.get(0).getIp(), "拒绝记录同样要落 IP");
     }
 
     @Test
@@ -131,6 +136,7 @@ class AccessFlowIntegrationTest {
     void canReopenAfterCheckIn() {
         Reservation r = insertApprovedNow();
         reservationService.checkIn(r.getId(), student.getId(), "4321", "127.0.0.1");
+        accessService.openAfterCheckIn(r.getId(), student.getId(), "127.0.0.1");
 
         AccessService.UnlockResult again = accessService.reopen(r.getId(), student.getId(), "127.0.0.1");
 
@@ -144,6 +150,7 @@ class AccessFlowIntegrationTest {
     void otherUserCannotOpen() {
         Reservation r = insertApprovedNow();
         reservationService.checkIn(r.getId(), student.getId(), "4321", "127.0.0.1");
+        accessService.openAfterCheckIn(r.getId(), student.getId(), "127.0.0.1");
 
         Long otherUserId = userService.lambdaQuery().eq(User::getUsername, "student02").one().getId();
         AccessService.UnlockResult result = accessService.reopen(r.getId(), otherUserId, "127.0.0.1");

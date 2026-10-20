@@ -32,8 +32,9 @@ import java.util.Optional;
  * "人数达 5 人一律转人工"。若先判自动通过，一个信用 95 分的 6 人申请会被自动放过，
  * 违背"人数阈值转人工"的硬要求。因此人工条件必须先判。
  *
- * <p>{@code maxContinuousMinutes}（单间连续占用 ≤ 4 小时）未在此处重复校验：
- * 单元规则的上限就是 16 格 = 240 分钟，等价且更严格。
+ * <p><b>关于 {@code maxContinuousMinutes}</b>：它参与"自动通过"的判定，而不是交给单元规则兜底。
+ * 单元上限（16 格 = 240 分钟）只是技术边界，管理员把它调到 60 分钟时期望的是"超过 1 小时转人工"，
+ * 如果仍按 240 分钟放行，这个配置就是摆设（BUG-013）。
  */
 @Component
 @RequiredArgsConstructor
@@ -47,6 +48,7 @@ public class RuleEngine {
     public static final String RULE_CREDIT_MID_LONG = "E05_CREDIT_MID_LONG";
     public static final String RULE_PURPOSE_REQUIRED = "E06_PURPOSE_REQUIRED";
     public static final String RULE_CREDIT_LOW = "E07_CREDIT_LOW";
+    public static final String RULE_MAX_CONTINUOUS = "E08_MAX_CONTINUOUS";
 
     private final List<BasicRule> basicRules;
     private final RuleParamsProvider params;
@@ -83,12 +85,25 @@ public class RuleEngine {
 
         // ---- 信用分档次 ----
         int credit = ctx.creditScore();
+        int minutes = ctx.durationMinutes(slotSchema.unitMinutes());
+        // 连续占用上限先于信用分档判断：它是管理员配置的硬上限，无论信用多高都不得自动放过
+        boolean withinContinuous = minutes <= p.maxContinuousMinutes();
+
         if (credit >= p.autoApproveCredit()) {
+            if (!withinContinuous) {
+                return RuleOutcome.forceManual(RULE_MAX_CONTINUOUS,
+                        "单间连续占用 " + minutes + " 分钟，超过上限 " + p.maxContinuousMinutes()
+                                + " 分钟，需管理员人工审核");
+            }
             return RuleOutcome.autoApprove(RULE_CREDIT_HIGH,
                     "信用分 " + credit + " 分，符合自动通过条件");
         }
         if (credit >= p.midCreditMin()) {
-            int minutes = ctx.durationMinutes(slotSchema.unitMinutes());
+            if (!withinContinuous) {
+                return RuleOutcome.forceManual(RULE_MAX_CONTINUOUS,
+                        "单间连续占用 " + minutes + " 分钟，超过上限 " + p.maxContinuousMinutes()
+                                + " 分钟，需管理员人工审核");
+            }
             if (minutes <= p.midMaxDurationMinutes()) {
                 return RuleOutcome.autoApprove(RULE_CREDIT_MID_SHORT,
                         "信用分 " + credit + " 分且时长不超过 " + p.midMaxDurationMinutes() + " 分钟，自动通过");

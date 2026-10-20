@@ -216,8 +216,9 @@ class AccessServiceImplTest {
     @DisplayName("签到后的自动开门：不校验签到码，但仍校验时段")
     void openAfterCheckInChecksWindow() {
         Reservation r = reservation(ReservationStatus.CHECKED_IN.code(), NOW.minusHours(3), NOW.minusMinutes(10));
+        when(reservationMapper.selectById(RES_ID)).thenReturn(r);
 
-        AccessService.UnlockResult result = service.openAfterCheckIn(r, USER, "127.0.0.1");
+        AccessService.UnlockResult result = service.openAfterCheckIn(RES_ID, USER, "127.0.0.1");
 
         assertFalse(result.granted());
         assertEquals("OUT_OF_WINDOW", result.denyReason());
@@ -227,6 +228,7 @@ class AccessServiceImplTest {
     @DisplayName("签到后自动开门成功：指令载荷包含预约与时段，便于设备端自检")
     void openAfterCheckInPayload() {
         Reservation r = reservation(ReservationStatus.CHECKED_IN.code(), NOW.minusMinutes(1), NOW.plusHours(1));
+        when(reservationMapper.selectById(RES_ID)).thenReturn(r);
         when(deviceMapper.findByRoomId(1L)).thenReturn(device());
         when(doorController.reachable(any())).thenReturn(true);
         DeviceCommand command = new DeviceCommand();
@@ -235,7 +237,7 @@ class AccessServiceImplTest {
                 org.mockito.ArgumentMatchers.anyInt())).thenReturn(command);
         when(doorController.dispatch(any(), any())).thenReturn(DispatchResult.ACKED);
 
-        assertTrue(service.openAfterCheckIn(r, USER, "127.0.0.1").granted());
+        assertTrue(service.openAfterCheckIn(RES_ID, USER, "127.0.0.1").granted());
 
         ArgumentCaptor<String> payload = ArgumentCaptor.forClass(String.class);
         verify(deviceCommandService).issue(any(), any(), any(), payload.capture(),
