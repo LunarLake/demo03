@@ -61,6 +61,12 @@
             <artifactId>hutool-all</artifactId>
             <version>5.8.4</version>
         </dependency>
+        <!-- MQTT 客户端：门禁设备通道（P5）。无 Broker 时不会启用（app.mqtt.mode 默认 inprocess） -->
+        <dependency>
+            <groupId>org.eclipse.paho</groupId>
+            <artifactId>org.eclipse.paho.client.mqttv3</artifactId>
+            <version>1.2.5</version>
+        </dependency>
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-test</artifactId>

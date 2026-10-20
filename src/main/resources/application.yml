@@ -43,16 +43,16 @@ app:
   registration:
     enabled: false
 
-  # MQTT 门禁通道；未装 Mosquitto 时置 false，业务仍可完整运行
+  # MQTT 门禁通道
+  #   mode=inprocess：进程内总线，不需要 Broker，模拟器与后端在同一进程内互通（默认）
+  #   mode=paho     ：连真实 Mosquitto（需先启动 Broker）
   mqtt:
-    enabled: ${MQTT_ENABLED:false}
+    mode: ${MQTT_MODE:inprocess}
     broker-url: ${MQTT_BROKER_URL:tcp://127.0.0.1:1883}
     client-id: ${MQTT_CLIENT_ID:demo03-backend}
     username: ${MQTT_USERNAME:backend}
     password: ${MQTT_PASSWORD:}
     qos: 1
-    # 一次性指令的有效期：超时未回执即置 EXPIRED，设备端也会按 expiresAt 丢弃
-    command-ttl-seconds: 30
     # 心跳超时判定：设备 30 秒一次，超过 90 秒判离线
     heartbeat-timeout-seconds: 90
 
@@ -63,6 +63,8 @@ app:
     secret: demo-secret-room-a-please-change
     # 故障注入：0 = 正常，0.2 = 随机丢回执，用于验证"签到成功但开锁失败不回滚"
     fail-rate: 0.0
+    # 屏幕输出目录，答辩时可截图
+    screen-dir: target/simulator
 
   # 门禁通道：log = 仅记录不真开锁（默认，硬件未到货）；mqtt = 走 Mosquitto 下发
   door:

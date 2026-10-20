@@ -1,6 +1,7 @@
 package com.wyc.demo03.service.impl;
 
 import com.wyc.demo03.config.DoorProperties;
+import com.wyc.demo03.device.DispatchResult;
 import com.wyc.demo03.device.DoorController;
 import com.wyc.demo03.domain.ReservationStatus;
 import com.wyc.demo03.entity.AccessLog;
@@ -175,7 +176,7 @@ class AccessServiceImplTest {
         command.setId(11L);
         when(deviceCommandService.issue(eq(3L), eq(RES_ID), eq(DeviceCommand.Type.UNLOCK), any(), eq(30)))
                 .thenReturn(command);
-        when(doorController.dispatch(any(), any())).thenReturn(true);
+        when(doorController.dispatch(any(), any())).thenReturn(DispatchResult.ACKED);
 
         AccessService.UnlockResult result = service.reopen(RES_ID, USER, "127.0.0.1");
 
@@ -201,7 +202,7 @@ class AccessServiceImplTest {
         command.setMsgId("msg-2");
         when(deviceCommandService.issue(any(), any(), any(), any(), org.mockito.ArgumentMatchers.anyInt()))
                 .thenReturn(command);
-        when(doorController.dispatch(any(), any())).thenReturn(false);
+        when(doorController.dispatch(any(), any())).thenReturn(DispatchResult.SENT);
 
         AccessService.UnlockResult result = service.reopen(RES_ID, USER, "127.0.0.1");
 
@@ -232,14 +233,14 @@ class AccessServiceImplTest {
         command.setMsgId("msg-3");
         when(deviceCommandService.issue(any(), any(), any(), org.mockito.ArgumentMatchers.anyString(),
                 org.mockito.ArgumentMatchers.anyInt())).thenReturn(command);
-        when(doorController.dispatch(any(), any())).thenReturn(true);
+        when(doorController.dispatch(any(), any())).thenReturn(DispatchResult.ACKED);
 
         assertTrue(service.openAfterCheckIn(r, USER, "127.0.0.1").granted());
 
         ArgumentCaptor<String> payload = ArgumentCaptor.forClass(String.class);
         verify(deviceCommandService).issue(any(), any(), any(), payload.capture(),
                 org.mockito.ArgumentMatchers.anyInt());
-        assertTrue(payload.getValue().contains("\"reservationId\":42"));
-        assertTrue(payload.getValue().contains("\"start\":\""));
+        assertTrue(payload.getValue().contains("reservation=42"));
+        assertTrue(payload.getValue().contains("start="));
     }
 }

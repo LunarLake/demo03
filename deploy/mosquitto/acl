@@ -1,0 +1,25 @@
+# =============================================================
+# Mosquitto ACL —— 最小权限
+# =============================================================
+# 约定：设备账号只能访问 room/{自己的 deviceCode}/#
+#      后端账号可以访问 room/+/#（它要给所有设备下发指令）
+#
+# ★ 绝不能给设备配 room/# 或 #：一台设备被攻破就等于所有门失守。
+# ★ 设备不得订阅别的设备主题，否则能读到别人的签到码。
+# =============================================================
+
+# ---------- 后端 ----------
+user backend
+topic readwrite room/+/snapshot
+topic readwrite room/+/cmd
+topic readwrite room/+/ack
+topic readwrite room/+/heartbeat
+topic readwrite room/+/event
+
+# ---------- 研讨室A 门禁 ----------
+user room-a
+topic readwrite room/ROOM-A-01/#
+
+# ---------- 研讨室B 门禁 ----------
+user room-b
+topic readwrite room/ROOM-B-01/#

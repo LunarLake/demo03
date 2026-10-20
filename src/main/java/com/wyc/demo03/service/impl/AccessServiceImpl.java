@@ -1,6 +1,7 @@
 package com.wyc.demo03.service.impl;
 
 import com.wyc.demo03.config.DoorProperties;
+import com.wyc.demo03.device.DispatchResult;
 import com.wyc.demo03.device.DoorController;
 import com.wyc.demo03.domain.ReservationStatus;
 import com.wyc.demo03.entity.AccessLog;
@@ -66,7 +67,7 @@ public class AccessServiceImpl implements AccessService {
             return UnlockResult.deny("OUT_OF_WINDOW", "预约已结束，门禁授权已撤销");
         }
 
-        return unlock(r, userId, ip);
+        return unlock(r, userId, ip, "REOPEN");
     }
 
     @Override
@@ -82,7 +83,7 @@ public class AccessServiceImpl implements AccessService {
             record(reservation, userId, null, null, "OUT_OF_WINDOW");
             return UnlockResult.deny("OUT_OF_WINDOW", "不在预约有效时段内，未下发开门指令");
         }
-        return unlock(reservation, userId, ip);
+        return unlock(reservation, userId, ip, "FIRST_CHECKIN");
     }
 
     @Override
@@ -92,7 +93,7 @@ public class AccessServiceImpl implements AccessService {
 
     // ====================================================================
 
-    private UnlockResult unlock(Reservation r, Long userId, String ip) {
+    private UnlockResult unlock(Reservation r, Long userId, String ip, String reason) {
         Device device = deviceMapper.findByRoomId(r.getRoomId());
         if (device == null) {
             record(r, userId, null, null, "DEVICE_OFFLINE");
@@ -104,29 +105,49 @@ public class AccessServiceImpl implements AccessService {
         }
 
         DeviceCommand command = deviceCommandService.issue(device.getId(), r.getId(),
-                DeviceCommand.Type.UNLOCK, payload(r, userId), doorProperties.getTtlSeconds());
+                DeviceCommand.Type.UNLOCK, payload(r, userId, reason), doorProperties.getTtlSeconds());
 
         // 先置 SENT 再投递：回执只接受 SENT 状态的指令，否则 ack 会被状态条件静默挡住
         deviceCommandService.markSent(command.getMsgId());
-        boolean delivered = doorController.dispatch(device, command);
-        if (delivered) {
+        DispatchResult dispatch = doorController.dispatch(device, command);
+
+        if (dispatch == DispatchResult.ACKED) {
+            // 只有"设备已确认"才结算 ACKED；SENT 必须等回执，否则会把没开锁说成开锁
             deviceCommandService.ack(command.getMsgId(), DeviceCommand.Status.ACKED, "OK");
+        } else if (dispatch == DispatchResult.SENT) {
+            // 回执可能在 dispatch 返回前就到了（进程内总线、或设备响应极快）。
+            // 回查一次库：状态确实变成 ACKED 才对外声称已开锁，否则如实说"等待确认"。
+            DeviceCommand latest = deviceCommandService.findByMsgId(command.getMsgId());
+            if (latest != null && DeviceCommand.Status.ACKED.name().equals(latest.getStatus())) {
+                dispatch = DispatchResult.ACKED;
+            }
         }
 
         // 已授权就记 granted=1：即使回执还没到，"服务端已放行"这个事实也要留痕
         record(r, userId, device.getId(), command.getId(), null);
 
-        return delivered
-                ? UnlockResult.granted(command.getMsgId(), "ACKED", "门禁已开锁")
-                : UnlockResult.granted(command.getMsgId(), "SENT", "指令已下发，等待门禁确认");
+        return switch (dispatch) {
+            case ACKED -> UnlockResult.granted(command.getMsgId(), "ACKED", "门禁已开锁，请推门进入");
+            case SENT -> UnlockResult.granted(command.getMsgId(), "SENT", "开门指令已下发，等待门禁确认");
+            case FAILED -> UnlockResult.granted(command.getMsgId(), "FAILED",
+                    "已授权，但指令未能下发到门禁，请联系管理员或使用机械释放杆");
+        };
     }
 
-    private String payload(Reservation r, Long userId) {
-        return "{\"reservationId\":" + r.getId()
-                + ",\"roomId\":" + r.getRoomId()
-                + ",\"userId\":" + userId
-                + ",\"start\":\"" + r.getStartTime().format(ISO) + "\""
-                + ",\"end\":\"" + r.getEndTime().format(ISO) + "\"}";
+    /**
+     * 指令载荷：扁平 {@code k=v;k=v} 而不是 JSON。
+     *
+     * <p>这段字符串会原样参与 HMAC 的 canonical 计算，STM32 侧需要逐字节复现。
+     * JSON 对象的键序与空格在不同序列化器下不一致，扁平串切分即可，最稳。
+     */
+    private String payload(Reservation r, Long userId, String reason) {
+        return "reservation=" + r.getId()
+                + ";room=" + r.getRoomId()
+                + ";user=" + userId
+                + ";start=" + r.getStartTime().format(ISO)
+                + ";end=" + r.getEndTime().format(ISO)
+                + ";reason=" + reason
+                + ";pulseMs=3000";
     }
 
     /** 写一条开门记录；granted 由 denyReason 是否为空决定。 */

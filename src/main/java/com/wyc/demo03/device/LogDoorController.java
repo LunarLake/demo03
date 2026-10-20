@@ -31,11 +31,11 @@ public class LogDoorController implements DoorController {
     }
 
     @Override
-    public boolean dispatch(Device device, DeviceCommand command) {
+    public DispatchResult dispatch(Device device, DeviceCommand command) {
         log.warn("[模拟门禁] 未接入真实设备，指令仅记录不执行：device={} cmd={} msgId={}",
                 device == null ? "?" : device.getDeviceCode(),
                 command.getCmdType(),
                 command.getMsgId());
-        return true;
+        return DispatchResult.ACKED;
     }
 }

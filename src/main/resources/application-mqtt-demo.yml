@@ -1,0 +1,30 @@
+# =============================================================
+# 演示 profile：MQTT 全链路（无需 Mosquitto）
+# =============================================================
+# 启动：./mvnw spring-boot:run -Dspring-boot.run.profiles=local,mqtt-demo
+# ★ 必须带 local：否则会顶掉默认 profile，application-local.yml 里的数据库密码不再加载
+#
+# 效果：
+#   - 门禁走 MQTT 通道（app.door.mode=mqtt），不再是"只记录不执行"的日志实现
+#   - 传输用进程内总线（app.mqtt.mode=inprocess），不需要 Broker
+#   - 设备模拟器接管 room/ROOM-A-01，真实执行五步校验（HMAC/过期/去重/绑定）
+#   - 签到成功后能在控制台看到 [LOCK] PULSE 3000ms 与模拟器回的 ack
+#
+# 接真实 Mosquitto 时改两处：app.mqtt.mode=paho + 填 broker-url 与账号。
+# =============================================================
+app:
+  door:
+    mode: mqtt
+  mqtt:
+    mode: inprocess
+  simulator:
+    enabled: true
+    device-code: ROOM-A-01
+    secret: demo-secret-room-a-please-change
+    # 想验证"签到成功但开锁失败不回滚"，把这里改成 0.5 再签到几次
+    fail-rate: 0.0
+
+logging:
+  level:
+    com.wyc.demo03.mqtt: INFO
+    com.wyc.demo03.simulator: INFO
