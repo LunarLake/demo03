@@ -236,7 +236,7 @@ CREATE TABLE IF NOT EXISTS t_access_log (
     id             BIGINT      NOT NULL AUTO_INCREMENT,
     reservation_id BIGINT      DEFAULT NULL,
     user_id        BIGINT      NOT NULL,
-    device_id      BIGINT      NOT NULL,
+    device_id      BIGINT      DEFAULT NULL,
     command_id     BIGINT      DEFAULT NULL,
     granted        TINYINT     NOT NULL,
     deny_reason    VARCHAR(40) DEFAULT NULL,

@@ -58,6 +58,33 @@
             </div>
         </div>
         <div class="card summary-card mb-3">
+            <div class="card-header bg-white border-0"><h2 class="h5 mb-0">开门记录</h2></div>
+            <div class="card-body p-0">
+                <div class="table-responsive">
+                    <table class="table table-sm mb-0 align-middle">
+                        <thead>
+                            <tr><th>时间</th><th>结果</th><th>拒绝原因</th><th>指令</th></tr>
+                        </thead>
+                        <tbody>
+                            <tr th:each="l : ${accessLogs}">
+                                <td class="small text-nowrap" th:text="${#temporals.format(l.createdAt, 'MM-dd HH:mm:ss')}"></td>
+                                <td>
+                                    <span th:if="${l.granted == 1}" class="badge bg-success">已授权</span>
+                                    <span th:if="${l.granted == 0}" class="badge bg-danger">已拒绝</span>
+                                </td>
+                                <td class="small text-muted" th:text="${l.denyReason}"></td>
+                                <td class="small text-muted"
+                                    th:text="${l.commandId != null} ? '#' + ${l.commandId} : '—'"></td>
+                            </tr>
+                            <tr th:if="${#lists.isEmpty(accessLogs)}">
+                                <td colspan="4" class="text-center text-muted py-3">暂无开门记录</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+        <div class="card summary-card mb-3">
             <div class="card-header bg-white border-0"><h2 class="h5 mb-0">人工认定（写入信用流水）</h2></div>
             <div class="card-body">
                 <p class="small text-muted">

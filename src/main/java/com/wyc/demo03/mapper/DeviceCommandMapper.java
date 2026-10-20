@@ -16,6 +16,10 @@ public interface DeviceCommandMapper extends BaseMapper<DeviceCommand> {
     @Select("SELECT * FROM t_device_command WHERE msg_id = #{msgId}")
     DeviceCommand findByMsgId(@Param("msgId") String msgId);
 
+    /** 标记已投递（PENDING → SENT）。必须先置 SENT 再等回执，否则回执会被状态条件挡住。 */
+    @Update("UPDATE t_device_command SET status = 'SENT' WHERE msg_id = #{msgId} AND status = 'PENDING'")
+    int markSent(@Param("msgId") String msgId);
+
     /** 设备回执：只有仍处于 SENT 的指令才接受回执，避免迟到回执覆盖已结算的状态。 */
     @Update("UPDATE t_device_command SET status = #{status}, result_code = #{resultCode}, acked_at = #{ackedAt} "
             + "WHERE msg_id = #{msgId} AND status = 'SENT'")
@@ -24,9 +28,14 @@ public interface DeviceCommandMapper extends BaseMapper<DeviceCommand> {
             @Param("resultCode") String resultCode,
             @Param("ackedAt") LocalDateTime ackedAt);
 
-    /** 超时未回执的指令置为 EXPIRED。 */
+    /**
+     * 超时的指令置为 EXPIRED。
+     *
+     * <p>PENDING 也要一起过期：入库了但一直没投递出去（例如设备离线）的指令，
+     * 过了有效期同样不能再被执行，否则设备一上线就会把陈旧的开锁指令补执行掉。
+     */
     @Update("UPDATE t_device_command SET status = 'EXPIRED' "
-            + "WHERE status = 'SENT' AND expires_at < #{now}")
+            + "WHERE status IN ('PENDING', 'SENT') AND expires_at < #{now}")
     int expireOverdue(@Param("now") LocalDateTime now);
 
     /** 某预约最近的下发记录，用于详情页时间线与"重复开锁"排查。 */

@@ -4,6 +4,7 @@ import com.wyc.demo03.common.ApiResponse;
 import com.wyc.demo03.common.SlotConflictException;
 import com.wyc.demo03.entity.MeetingRoom;
 import com.wyc.demo03.entity.Reservation;
+import com.wyc.demo03.service.AccessService;
 import com.wyc.demo03.service.MeetingRoomService;
 import com.wyc.demo03.service.ReservationService;
 import jakarta.servlet.http.HttpServletRequest;
@@ -36,10 +37,14 @@ public class ReservationController {
 
     private final ReservationService reservationService;
     private final MeetingRoomService meetingRoomService;
+    private final AccessService accessService;
 
-    public ReservationController(ReservationService reservationService, MeetingRoomService meetingRoomService) {
+    public ReservationController(ReservationService reservationService,
+                                 MeetingRoomService meetingRoomService,
+                                 AccessService accessService) {
         this.reservationService = reservationService;
         this.meetingRoomService = meetingRoomService;
+        this.accessService = accessService;
     }
 
     // ====================================================================
@@ -181,12 +186,16 @@ public class ReservationController {
         String result = reservationService.checkIn(reservationId, userId, code, request.getRemoteAddr());
 
         model.addAttribute("reservationId", reservationId);
-        boolean finished = "success".equals(result) || "already_checked_in".equals(result)
-                || "expired".equals(result) || "too_many_attempts".equals(result) || "error".equals(result);
+        // success_door_pending / success_door_failed 也属于"签到已完成"，不能再显示重试表单
+        boolean finished = result.startsWith("success")
+                || "already_checked_in".equals(result) || "expired".equals(result)
+                || "too_many_attempts".equals(result) || "error".equals(result);
         model.addAttribute("checkInFinished", finished);
-        model.addAttribute("infoType", "success".equals(result) ? "success" : "danger");
+        model.addAttribute("infoType", result.startsWith("success") ? "success" : "danger");
         model.addAttribute("info", switch (result) {
-            case "success" -> "签到成功！门禁授权已下发。";
+            case "success" -> "签到成功！门禁已开锁，请推门进入。";
+            case "success_door_pending" -> "签到成功！开门指令已下发，请稍候门禁确认。";
+            case "success_door_failed" -> "签到成功！但门禁未能开锁，请联系管理员或使用备用钥匙。";
             case "wrong_code" -> "签到码错误！";
             case "too_many_attempts" -> "签到码错误次数过多，本次签到已锁定，请联系管理员！";
             case "too_early" -> "尚未到签到时间（签到从预约开始时刻起开放）。";
@@ -195,6 +204,22 @@ public class ReservationController {
             default -> "签到失败！";
         });
         return "check-in";
+    }
+
+    /**
+     * 已签到预约再次开门。
+     *
+     * <p>不要求在门外再输一次签到码 —— 文档 3.2.3 明确"再次认证申请开门，不要求重复首次签到"，
+     * 但每次都重新校验账号、归属、状态与有效时段。
+     */
+    @PostMapping("/reservation/open-door/{id}")
+    public String openDoor(@PathVariable Long id, HttpServletRequest request, HttpSession session,
+                           RedirectAttributes ra) {
+        Long userId = (Long) session.getAttribute("Id");
+        AccessService.UnlockResult result = accessService.reopen(id, userId, request.getRemoteAddr());
+        ra.addFlashAttribute("infoType", result.granted() ? "success" : "danger");
+        ra.addFlashAttribute("info", result.message());
+        return "redirect:/my-reservations";
     }
 
     // ====================================================================
@@ -224,6 +249,7 @@ public class ReservationController {
             return "redirect:/reservation/approve-list";
         }
         model.addAttribute("detail", detail);
+        model.addAttribute("accessLogs", accessService.recentLogs(id));
         return "reservation-detail";
     }
 

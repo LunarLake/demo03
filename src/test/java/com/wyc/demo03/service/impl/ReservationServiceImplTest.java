@@ -21,6 +21,7 @@ import com.wyc.demo03.rule.basic.CreditFloorRule;
 import com.wyc.demo03.rule.basic.NoActiveViolationRule;
 import com.wyc.demo03.rule.basic.SlotAlignmentRule;
 import com.wyc.demo03.rule.basic.SlotOccupiedRule;
+import com.wyc.demo03.service.AccessService;
 import com.wyc.demo03.service.AttendanceRecordService;
 import com.wyc.demo03.service.CheckinCodeService;
 import com.wyc.demo03.service.CreditService;
@@ -80,6 +81,7 @@ class ReservationServiceImplTest {
     @Mock private SlotService slotService;
     @Mock private CheckinCodeService checkinCodeService;
     @Mock private CreditService creditService;
+    @Mock private AccessService accessService;
     @Mock private AuditLogMapper auditLogMapper;
 
     private final MutableClock clock = MutableClock.at(T0);
@@ -104,7 +106,7 @@ class ReservationServiceImplTest {
 
         service = new ReservationServiceImpl(attendanceRecordService, meetingRoomService, userService,
                 slotService, checkinCodeService, creditService, engine, schema, properties,
-                auditLogMapper, clock);
+                auditLogMapper, clock, accessService);
         ReflectionTestUtils.setField(service, "baseMapper", reservationMapper);
 
         room = new MeetingRoom();
@@ -126,6 +128,9 @@ class ReservationServiceImplTest {
         lenient().when(slotService.findOccupied(anyLong(), anyList())).thenReturn(List.of());
         lenient().when(creditService.scoreOf(anyLong())).thenReturn(100);
         lenient().when(checkinCodeService.issue(anyLong())).thenReturn("1234");
+        // 默认门禁正常回执；个别用例再覆盖成失败
+        lenient().when(accessService.openAfterCheckIn(any(), anyLong(), any()))
+                .thenReturn(AccessService.UnlockResult.granted("msg-1", "ACKED", "门禁已开锁"));
         lenient().when(meetingRoomService.getById(1L)).thenReturn(room);
     }
 

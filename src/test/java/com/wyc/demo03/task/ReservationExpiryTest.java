@@ -2,6 +2,7 @@ package com.wyc.demo03.task;
 
 import com.wyc.demo03.entity.Reservation;
 import com.wyc.demo03.service.CreditService;
+import com.wyc.demo03.service.DeviceCommandService;
 import com.wyc.demo03.service.ReservationService;
 import com.wyc.demo03.support.MutableClock;
 import org.junit.jupiter.api.BeforeEach;
@@ -37,13 +38,15 @@ class ReservationExpiryTest {
     private ReservationService reservationService;
     @Mock
     private CreditService creditService;
+    @Mock
+    private DeviceCommandService deviceCommandService;
 
     private final MutableClock clock = MutableClock.at(T0);
     private ReservationScheduler scheduler;
 
     @BeforeEach
     void setUp() {
-        scheduler = new ReservationScheduler(reservationService, creditService, clock);
+        scheduler = new ReservationScheduler(reservationService, creditService, deviceCommandService, clock);
     }
 
     @Test

@@ -16,7 +16,7 @@ import java.time.Clock;
  * 注入 {@link Clock} 后，测试可以把它固定到任意时刻，把 24 小时的收敛过程压缩成毫秒。
  */
 @Configuration
-@EnableConfigurationProperties(SlotProperties.class)
+@EnableConfigurationProperties({SlotProperties.class, DoorProperties.class})
 public class ClockConfig {
 
     /** 系统时钟，默认时区。测试用 {@code Clock.fixed(...)} 覆盖。 */

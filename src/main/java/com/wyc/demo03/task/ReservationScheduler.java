@@ -2,6 +2,7 @@ package com.wyc.demo03.task;
 
 import com.wyc.demo03.entity.Reservation;
 import com.wyc.demo03.service.CreditService;
+import com.wyc.demo03.service.DeviceCommandService;
 import com.wyc.demo03.service.ReservationService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -34,6 +35,7 @@ public class ReservationScheduler {
 
     private final ReservationService reservationService;
     private final CreditService creditService;
+    private final DeviceCommandService deviceCommandService;
     private final Clock clock;
 
     @Scheduled(fixedDelay = 60_000)
@@ -44,10 +46,12 @@ public class ReservationScheduler {
             int noShow = reservationService.releaseNoShow(now);
             int finished = reservationService.finishExpired(now);
             List<Reservation> reminded = reservationService.remindEnding(now);
+            // 超时未回执的开门指令置 EXPIRED：过期指令不得再被执行
+            int expired = deviceCommandService.expireOverdue(now);
 
-            if (pending > 0 || noShow > 0 || finished > 0 || !reminded.isEmpty()) {
-                log.info("预约状态收敛：待审批释放 {}，爽约释放 {}，到期结束 {}，提醒 {}",
-                        pending, noShow, finished, reminded.size());
+            if (pending > 0 || noShow > 0 || finished > 0 || !reminded.isEmpty() || expired > 0) {
+                log.info("预约状态收敛：待审批释放 {}，爽约释放 {}，到期结束 {}，提醒 {}，指令过期 {}",
+                        pending, noShow, finished, reminded.size(), expired);
             }
         } catch (RuntimeException e) {
             // 单轮失败不能终止调度：把异常吞掉并记录，下一轮会重试（所有操作都是幂等的）

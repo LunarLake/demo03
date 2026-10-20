@@ -22,6 +22,7 @@ import com.wyc.demo03.entity.User;
 import com.wyc.demo03.mapper.AuditLogMapper;
 import com.wyc.demo03.mapper.ReservationMapper;
 import com.wyc.demo03.rule.RuleEngine;
+import com.wyc.demo03.service.AccessService;
 import com.wyc.demo03.service.AttendanceRecordService;
 import com.wyc.demo03.service.CheckinCodeService;
 import com.wyc.demo03.service.CreditService;
@@ -30,6 +31,7 @@ import com.wyc.demo03.service.ReservationService;
 import com.wyc.demo03.service.SlotService;
 import com.wyc.demo03.service.UserService;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -61,6 +63,7 @@ import java.util.concurrent.atomic.AtomicInteger;
  * 已开始的预约不允许用户取消。v1 允许"只要没签到就能取消"，这会给爽约留后门：
  * 学生 14:05 发现赶不上，直接取消就能躲掉 −10 分的爽约认定。
  */
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class ReservationServiceImpl extends ServiceImpl<ReservationMapper, Reservation>
@@ -80,6 +83,7 @@ public class ReservationServiceImpl extends ServiceImpl<ReservationMapper, Reser
     private final SlotProperties slotProperties;
     private final AuditLogMapper auditLogMapper;
     private final Clock clock;
+    private final AccessService accessService;
 
     /** 预约 ID → 签到码输错次数（内存版，单实例部署适用）。 */
     private final ConcurrentMap<Long, AtomicInteger> checkInFailures = new ConcurrentHashMap<>();
@@ -387,7 +391,28 @@ public class ReservationServiceImpl extends ServiceImpl<ReservationMapper, Reser
         attendanceRecordService.save(record);
 
         audit("USER", AuditLog.Action.CHECKIN, reservationId, "首次签到成功");
-        return "success";
+        // 签到落库后再开锁：开锁失败不影响签到（文档 3.2.3），因此这里把异常全部吞掉
+        return openDoorAfterCheckIn(r, userId, ip);
+    }
+
+    /**
+     * 签到成功后的首次开门。
+     *
+     * <p>★ 关键取舍：开锁的任何失败都**不能**让签到回滚。学生已经到门口了，
+     * 因为门禁离线就取消签到、再判一次爽约，是最糟的体验。因此这里兜住所有异常。
+     */
+    private String openDoorAfterCheckIn(Reservation r, Long userId, String ip) {
+        try {
+            AccessService.UnlockResult result = accessService.openAfterCheckIn(r, userId, ip);
+            if (!result.granted()) {
+                log.warn("签到成功但开门被拒：reservation={} reason={}", r.getId(), result.denyReason());
+                return "success_door_failed";
+            }
+            return result.acknowledged() ? "success" : "success_door_pending";
+        } catch (RuntimeException e) {
+            log.error("签到成功但开门异常：reservation={}", r.getId(), e);
+            return "success_door_failed";
+        }
     }
 
     /** 签到窗口长度（分钟），来自 {@code app.slot.checkin-window-minutes}。 */

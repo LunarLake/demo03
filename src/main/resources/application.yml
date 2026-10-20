@@ -63,3 +63,9 @@ app:
     secret: demo-secret-room-a-please-change
     # 故障注入：0 = 正常，0.2 = 随机丢回执，用于验证"签到成功但开锁失败不回滚"
     fail-rate: 0.0
+
+  # 门禁通道：log = 仅记录不真开锁（默认，硬件未到货）；mqtt = 走 Mosquitto 下发
+  door:
+    mode: ${DOOR_MODE:log}
+    # 一次性指令有效期：过期后设备必须丢弃，服务端置 EXPIRED
+    ttl-seconds: 30

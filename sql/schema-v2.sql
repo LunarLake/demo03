@@ -337,7 +337,7 @@ CREATE TABLE t_access_log (
     id             BIGINT      NOT NULL AUTO_INCREMENT COMMENT '主键',
     reservation_id BIGINT      DEFAULT NULL            COMMENT '关联预约',
     user_id        BIGINT      NOT NULL                COMMENT '申请人',
-    device_id      BIGINT      NOT NULL                COMMENT '目标设备',
+    device_id      BIGINT      DEFAULT NULL            COMMENT '目标设备；房间未配置设备时为空（仍要留拒绝记录）',
     command_id     BIGINT      DEFAULT NULL            COMMENT '关联指令',
     granted        TINYINT     NOT NULL                COMMENT '1-已授权下发 0-拒绝',
     deny_reason    VARCHAR(40) DEFAULT NULL            COMMENT '拒绝原因：NOT_OWNER/STATUS_INVALID/OUT_OF_WINDOW/NO_CODE/DEVICE_OFFLINE',

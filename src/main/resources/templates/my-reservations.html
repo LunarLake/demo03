@@ -185,6 +185,15 @@
                     >
                       申诉
                     </a>
+                    <form
+                      th:if="${r['reservation_status'] == 6}"
+                      th:action="@{/reservation/open-door/{id}(id=${r.id})}"
+                      method="post"
+                      style="display: inline"
+                    >
+                      <input type="hidden" name="_csrf" th:value="${_csrf}" />
+                      <button type="submit" class="btn btn-sm btn-outline-primary">开门</button>
+                    </form>
                   </td>
                 </tr>
               </tbody>
