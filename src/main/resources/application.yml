@@ -17,3 +17,49 @@ server:
     session:
       cookie:
         same-site: lax
+
+# =============================================================
+# 业务参数（docs/重构改造计划.md 3.2.1 / 3.2.3 / 3.2.4）
+# 键名与 SlotProperties 的字段一一对应；现场演示可直接改这里再重启。
+# =============================================================
+app:
+  slot:
+    open-hour: 8
+    open-minute: 0
+    close-hour: 22
+    close-minute: 0
+    # 单元长度：文档要求 15 分钟
+    unit-minutes: 15
+    # 单次时长 15 分钟 ~ 4 小时 = 1 ~ 16 个单元
+    min-units: 1
+    max-units: 16
+    max-advance-days: 7
+    # 首次签到窗口：[开始, 开始+5min)
+    checkin-window-minutes: 5
+    # 结束前提醒
+    remind-before-minutes: 5
+
+  # 开放注册：一期只保留 5 个虚构账号，默认关闭（见计划 Q4）
+  registration:
+    enabled: false
+
+  # MQTT 门禁通道；未装 Mosquitto 时置 false，业务仍可完整运行
+  mqtt:
+    enabled: ${MQTT_ENABLED:false}
+    broker-url: ${MQTT_BROKER_URL:tcp://127.0.0.1:1883}
+    client-id: ${MQTT_CLIENT_ID:demo03-backend}
+    username: ${MQTT_USERNAME:backend}
+    password: ${MQTT_PASSWORD:}
+    qos: 1
+    # 一次性指令的有效期：超时未回执即置 EXPIRED，设备端也会按 expiresAt 丢弃
+    command-ttl-seconds: 30
+    # 心跳超时判定：设备 30 秒一次，超过 90 秒判离线
+    heartbeat-timeout-seconds: 90
+
+  # 设备模拟器：硬件未到货期间顶替 STM32，同样走 MQTT 与 HMAC 校验
+  simulator:
+    enabled: ${SIMULATOR_ENABLED:false}
+    device-code: ROOM-A-01
+    secret: demo-secret-room-a-please-change
+    # 故障注入：0 = 正常，0.2 = 随机丢回执，用于验证"签到成功但开锁失败不回滚"
+    fail-rate: 0.0
