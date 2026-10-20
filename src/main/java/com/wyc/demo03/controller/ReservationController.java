@@ -7,6 +7,7 @@ import com.wyc.demo03.entity.Reservation;
 import com.wyc.demo03.service.AccessService;
 import com.wyc.demo03.service.MeetingRoomService;
 import com.wyc.demo03.service.RoomBoardService;
+import com.wyc.demo03.service.RuleConfigService;
 import com.wyc.demo03.service.ReservationService;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpSession;
@@ -40,15 +41,18 @@ public class ReservationController {
     private final MeetingRoomService meetingRoomService;
     private final AccessService accessService;
     private final RoomBoardService roomBoardService;
+    private final RuleConfigService ruleConfigService;
 
     public ReservationController(ReservationService reservationService,
                                  MeetingRoomService meetingRoomService,
                                  AccessService accessService,
-                                 RoomBoardService roomBoardService) {
+                                 RoomBoardService roomBoardService,
+                                 RuleConfigService ruleConfigService) {
         this.reservationService = reservationService;
         this.meetingRoomService = meetingRoomService;
         this.accessService = accessService;
         this.roomBoardService = roomBoardService;
+        this.ruleConfigService = ruleConfigService;
     }
 
     // ====================================================================
@@ -168,7 +172,10 @@ public class ReservationController {
     // ====================================================================
     @GetMapping("/reservation/approve-list")
     public String approveList(Model model) {
+        int dueHours = ruleConfigService.currentParams().manualReviewDueHours();
         model.addAttribute("approvals", reservationService.findApprovals());
+        model.addAttribute("overdue", reservationService.countPendingOverdue(dueHours));
+        model.addAttribute("dueHours", dueHours);
         return "approve-list";
     }
 

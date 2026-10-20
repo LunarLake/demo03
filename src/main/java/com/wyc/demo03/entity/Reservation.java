@@ -46,6 +46,9 @@ public class Reservation {
     /** 状态码，见 {@link ReservationStatus} */
     private Integer reservationStatus;
 
+    /** 提交时刻。24 小时办结时限的起算点，也是"待审批压了多久"的唯一依据 */
+    private LocalDateTime createdAt;
+
     /** 参会人数（1..房间容量） */
     @Positive
     private Integer attendeeCount;

@@ -21,6 +21,7 @@ import com.wyc.demo03.rule.basic.CreditFloorRule;
 import com.wyc.demo03.rule.basic.NoActiveViolationRule;
 import com.wyc.demo03.rule.basic.SlotAlignmentRule;
 import com.wyc.demo03.rule.basic.SlotOccupiedRule;
+import com.wyc.demo03.device.DeviceNotifier;
 import com.wyc.demo03.service.AccessService;
 import com.wyc.demo03.service.AttendanceRecordService;
 import com.wyc.demo03.service.CheckinCodeService;
@@ -82,6 +83,7 @@ class ReservationServiceImplTest {
     @Mock private CheckinCodeService checkinCodeService;
     @Mock private CreditService creditService;
     @Mock private AccessService accessService;
+    @Mock private DeviceNotifier deviceNotifier;
     @Mock private AuditLogMapper auditLogMapper;
 
     private final MutableClock clock = MutableClock.at(T0);
@@ -106,7 +108,7 @@ class ReservationServiceImplTest {
 
         service = new ReservationServiceImpl(attendanceRecordService, meetingRoomService, userService,
                 slotService, checkinCodeService, creditService, engine, schema, properties,
-                auditLogMapper, clock, accessService);
+                auditLogMapper, clock, accessService, deviceNotifier);
         ReflectionTestUtils.setField(service, "baseMapper", reservationMapper);
 
         room = new MeetingRoom();

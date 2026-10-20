@@ -46,6 +46,8 @@ class ControllerLayerTest {
     @Mock
     private RoomBoardService roomBoardService;
     @Mock
+    private com.wyc.demo03.service.RuleConfigService ruleConfigService;
+    @Mock
     private AttendanceRecordService attendanceRecordService;
     @Mock
     private ReservationService reservationService;
@@ -56,9 +58,11 @@ class ControllerLayerTest {
 
     @BeforeEach
     void setUp() {
+        org.mockito.Mockito.lenient().when(ruleConfigService.currentParams())
+                .thenReturn(com.wyc.demo03.domain.RuleParams.defaults());
         MainController mainController = new MainController(userService, meetingRoomService,
                 attendanceRecordService, reservationService, loginAttemptService);
-        ReservationController reservationController = new ReservationController(reservationService, meetingRoomService, accessService, roomBoardService);
+        ReservationController reservationController = new ReservationController(reservationService, meetingRoomService, accessService, roomBoardService, ruleConfigService);
         RoomController roomController = new RoomController(meetingRoomService, reservationService);
         com.wyc.demo03.service.LogService logService = org.mockito.Mockito.mock(com.wyc.demo03.service.LogService.class);
         org.mockito.Mockito.lenient().when(logService.list()).thenReturn(java.util.List.of());
@@ -434,7 +438,7 @@ class ControllerLayerTest {
 
         mockMvc = MockMvcBuilders.standaloneSetup(
                         new MainController(userService, meetingRoomService, attendanceRecordService, reservationService, loginAttemptService),
-                        new ReservationController(reservationService, meetingRoomService, accessService, roomBoardService),
+                        new ReservationController(reservationService, meetingRoomService, accessService, roomBoardService, ruleConfigService),
                         new RoomController(meetingRoomService, reservationService),
                         new LogController(logService, reservationService, attendanceRecordService))
                 .setViewResolvers(new InternalResourceViewResolver("/WEB-INF/views/", ".html"))

@@ -98,6 +98,11 @@ public interface ReservationMapper extends BaseMapper<Reservation> {
             + "WHERE r.reservation_status = 0 ORDER BY r.start_time ASC")
     List<Map<String, Object>> findApprovals();
 
+    /** 超过办结时限仍未处理的待审批数量（首页/审批页预警用）。 */
+    @Select("SELECT COUNT(*) FROM t_reservation "
+            + "WHERE reservation_status = 0 AND created_at < #{deadline}")
+    int countPendingOverdue(@Param("deadline") LocalDateTime deadline);
+
     /** 某用户某日已自动通过的笔数（附加规则"每日不超过 3 笔"用）。 */
     @Select("SELECT COUNT(*) FROM t_reservation "
             + "WHERE user_id = #{userId} AND decision_path = 'AUTO_PASS' AND DATE(start_time) = #{date}")

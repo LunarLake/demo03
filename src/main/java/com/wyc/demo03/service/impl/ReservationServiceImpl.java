@@ -14,6 +14,7 @@ import com.wyc.demo03.domain.SlotSchema;
 import com.wyc.demo03.domain.SlotUnit;
 import com.wyc.demo03.entity.AttendanceRecord;
 import com.wyc.demo03.entity.AuditLog;
+import com.wyc.demo03.device.DeviceNotifier;
 import com.wyc.demo03.entity.CreditLog;
 import com.wyc.demo03.entity.MeetingRoom;
 import com.wyc.demo03.entity.Reservation;
@@ -84,6 +85,7 @@ public class ReservationServiceImpl extends ServiceImpl<ReservationMapper, Reser
     private final AuditLogMapper auditLogMapper;
     private final Clock clock;
     private final AccessService accessService;
+    private final DeviceNotifier deviceNotifier;
 
     /** 预约 ID → 签到码输错次数（内存版，单实例部署适用）。 */
     private final ConcurrentMap<Long, AtomicInteger> checkInFailures = new ConcurrentHashMap<>();
@@ -174,6 +176,7 @@ public class ReservationServiceImpl extends ServiceImpl<ReservationMapper, Reser
                 // 先落库拿到 ID，再占位；占用失败会抛异常把这条记录一起回滚
                 slotService.occupy(r.getId(), r.getRoomId(), units);
                 String code = checkinCodeService.issue(r.getId());
+                notifySnapshot(r, ReservationStatus.APPROVED);
                 audit("STUDENT", AuditLog.Action.RESERVE, r.getId(),
                         "自动通过：" + outcome.firstRuleCode());
                 return SubmitResult.ok(r.getId(), ReservationStatus.APPROVED, outcome.message(), code);
@@ -232,6 +235,7 @@ public class ReservationServiceImpl extends ServiceImpl<ReservationMapper, Reser
         save(r);
         slotService.occupy(r.getId(), r.getRoomId(), units);
         String code = checkinCodeService.issue(r.getId());
+        notifySnapshot(r, ReservationStatus.APPROVED);
         audit("TEACHER", AuditLog.Action.RESERVE, r.getId(),
                 owners.isEmpty() ? "教师预约直接通过" : "教师覆盖 " + owners.size() + " 笔预约");
         return SubmitResult.ok(r.getId(), ReservationStatus.APPROVED, "预约已生效", code);
@@ -267,6 +271,7 @@ public class ReservationServiceImpl extends ServiceImpl<ReservationMapper, Reser
         slotService.occupy(id, r.getRoomId(), units);
 
         String code = checkinCodeService.issue(id);
+        notifySnapshot(r, ReservationStatus.APPROVED);
         audit("ADMIN", AuditLog.Action.APPROVE, id, "人工批准，签到码已签发");
         return ApproveResult.ok(code);
     }
@@ -326,6 +331,7 @@ public class ReservationServiceImpl extends ServiceImpl<ReservationMapper, Reser
         baseMapper.setCancelSource(reservationId, "USER");
         slotService.release(reservationId);
         checkinCodeService.revoke(reservationId);
+        notifySnapshot(r, ReservationStatus.CANCELED);
         audit("USER", AuditLog.Action.CANCEL, reservationId, "用户取消");
         return "success";
     }
@@ -391,6 +397,8 @@ public class ReservationServiceImpl extends ServiceImpl<ReservationMapper, Reser
         attendanceRecordService.save(record);
 
         audit("USER", AuditLog.Action.CHECKIN, reservationId, "首次签到成功");
+        // 先让屏幕切到"已签到"（顺带把当前预约绑定到该设备，供设备端做跨预约校验），再开门
+        notifySnapshot(r, ReservationStatus.CHECKED_IN);
         // 签到落库后再开锁：开锁失败不影响签到（文档 3.2.3），因此这里把异常全部吞掉
         return openDoorAfterCheckIn(r, userId, ip);
     }
@@ -451,6 +459,7 @@ public class ReservationServiceImpl extends ServiceImpl<ReservationMapper, Reser
             }
             slotService.release(r.getId());
             checkinCodeService.revoke(r.getId());
+            notifySnapshot(r, ReservationStatus.TIMEOUT_RELEASED);
             // 爽约扣分：同一预约同一原因由信用流水的唯一键兜底，重复扫描不会扣两次
             creditService.adjust(r.getUserId(), CreditLog.Reason.NO_SHOW, null,
                     r.getId(), null, "SYSTEM", "签到截止未签到");
@@ -477,6 +486,7 @@ public class ReservationServiceImpl extends ServiceImpl<ReservationMapper, Reser
             }
             slotService.release(r.getId());
             checkinCodeService.revoke(r.getId());
+            notifySnapshot(r, ReservationStatus.FINISHED);
             // 只有"已签到"才算按时到场：未签到的会被 releaseNoShow 先处理掉，走不到这里
             if (from == ReservationStatus.CHECKED_IN) {
                 creditService.adjust(r.getUserId(), CreditLog.Reason.ON_TIME_CHECKIN, null,
@@ -537,6 +547,18 @@ public class ReservationServiceImpl extends ServiceImpl<ReservationMapper, Reser
         audit(actorName(adminId), AuditLog.Action.CREDIT_ADJUST, reservationId, "认定违规使用 −20");
     }
 
+    /**
+     * 同步设备屏幕。失败只记日志 —— 屏幕不更新不是业务失败，
+     * 绝不能让一次 MQTT 抖动把刚批准的预约回滚掉。
+     */
+    private void notifySnapshot(Reservation r, ReservationStatus status) {
+        try {
+            deviceNotifier.snapshot(r, status);
+        } catch (RuntimeException e) {
+            log.warn("设备屏幕同步失败：reservation={} status={}", r == null ? null : r.getId(), status, e);
+        }
+    }
+
     private String actorName(Long userId) {
         if (userId == null) {
             return "SYSTEM";
@@ -548,6 +570,12 @@ public class ReservationServiceImpl extends ServiceImpl<ReservationMapper, Reser
     // ====================================================================
     // 查询
     // ====================================================================
+    @Override
+    public int countPendingOverdue(int dueHours) {
+        return baseMapper.countPendingOverdue(
+                LocalDateTime.now(clock).minusHours(Math.max(1, dueHours)).withNano(0));
+    }
+
     @Override
     public List<Map<String, Object>> findApprovals() {
         return baseMapper.findApprovals();
@@ -590,6 +618,7 @@ public class ReservationServiceImpl extends ServiceImpl<ReservationMapper, Reser
         r.setStartTime(form.getStartTime());
         r.setEndTime(form.getEndTime());
         r.setAttendeeCount(attendee);
+        r.setCreatedAt(now().withNano(0));
         String purpose = form.getPurpose();
         r.setPurpose(purpose == null || purpose.isBlank() ? null : purpose.trim());
         return r;

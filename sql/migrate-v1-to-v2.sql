@@ -49,6 +49,7 @@ ALTER TABLE t_reservation
         COMMENT '拒绝/取消/释放的原因，展示给申请人';
 
 ALTER TABLE t_reservation
+    ADD COLUMN created_at      DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '提交时刻',
     ADD COLUMN purpose         VARCHAR(200) DEFAULT NULL COMMENT '用途说明（信用分 <70 转人工时必填）',
     ADD COLUMN rule_version_id BIGINT       DEFAULT NULL COMMENT '本次判定所依据的规则版本',
     ADD COLUMN decision_path   VARCHAR(30)  DEFAULT NULL COMMENT 'AUTO_PASS/REJECTED_BASIC/MANUAL_PENDING/MANUAL_APPROVED/MANUAL_REJECTED/TEACHER_AUTO/APPEAL_REBUILD/LEGACY',
@@ -63,8 +64,12 @@ ALTER TABLE t_reservation
 -- 只新增 v1 没有的索引。
 -- idx_room_time / idx_user_status / idx_status_start 在 v1 中已存在，
 -- 结构与 v2 需要的一致（idx_room_time 多一列 end_time，仍然可用），不重建。
+-- 回填提交时刻：v1 没有记录，用开始时间近似（宁可把旧的算成"早就该办"，也不要算成"刚提交"）
+UPDATE t_reservation SET created_at = start_time WHERE start_time < created_at;
+
 ALTER TABLE t_reservation
     ADD KEY idx_manual_due (reservation_status, approved_at),
+    ADD KEY idx_created (reservation_status, created_at),
     ADD KEY idx_device_display (room_id, reservation_status, start_time, end_time);
 
 -- =============================================================

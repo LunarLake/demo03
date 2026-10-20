@@ -1,6 +1,7 @@
 package com.wyc.demo03.task;
 
 import com.wyc.demo03.entity.Reservation;
+import com.wyc.demo03.device.DeviceNotifier;
 import com.wyc.demo03.service.CreditService;
 import com.wyc.demo03.service.DeviceCommandService;
 import com.wyc.demo03.service.ReservationService;
@@ -40,13 +41,15 @@ class ReservationExpiryTest {
     private CreditService creditService;
     @Mock
     private DeviceCommandService deviceCommandService;
+    @Mock
+    private DeviceNotifier deviceNotifier;
 
     private final MutableClock clock = MutableClock.at(T0);
     private ReservationScheduler scheduler;
 
     @BeforeEach
     void setUp() {
-        scheduler = new ReservationScheduler(reservationService, creditService, deviceCommandService, clock);
+        scheduler = new ReservationScheduler(reservationService, creditService, deviceCommandService, deviceNotifier, clock);
     }
 
     @Test
@@ -80,6 +83,34 @@ class ReservationExpiryTest {
 
         assertDoesNotThrow(() -> scheduler.converge());
         verify(reservationService).remindEnding(T0);
+    }
+
+    @Test
+    @DisplayName("结束提醒会下发到设备")
+    void remindersArePushed() {
+        Reservation r = new Reservation();
+        r.setId(1L);
+        when(reservationService.remindEnding(T0)).thenReturn(List.of(r));
+        when(deviceNotifier.remind(r)).thenReturn(true);
+
+        scheduler.converge();
+
+        verify(deviceNotifier).remind(r);
+    }
+
+    @Test
+    @DisplayName("某台设备提醒失败不能拖垮整轮收敛")
+    void reminderFailureIsIsolated() {
+        Reservation broken = new Reservation();
+        broken.setId(1L);
+        Reservation fine = new Reservation();
+        fine.setId(2L);
+        when(reservationService.remindEnding(T0)).thenReturn(List.of(broken, fine));
+        when(deviceNotifier.remind(broken)).thenThrow(new IllegalStateException("mqtt down"));
+        when(deviceNotifier.remind(fine)).thenReturn(true);
+
+        assertDoesNotThrow(() -> scheduler.converge());
+        verify(deviceNotifier).remind(fine);
     }
 
     @Test

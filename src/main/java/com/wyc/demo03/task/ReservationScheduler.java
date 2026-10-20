@@ -1,5 +1,6 @@
 package com.wyc.demo03.task;
 
+import com.wyc.demo03.device.DeviceNotifier;
 import com.wyc.demo03.entity.Reservation;
 import com.wyc.demo03.service.CreditService;
 import com.wyc.demo03.service.DeviceCommandService;
@@ -36,6 +37,7 @@ public class ReservationScheduler {
     private final ReservationService reservationService;
     private final CreditService creditService;
     private final DeviceCommandService deviceCommandService;
+    private final DeviceNotifier deviceNotifier;
     private final Clock clock;
 
     @Scheduled(fixedDelay = 60_000)
@@ -46,17 +48,38 @@ public class ReservationScheduler {
             int noShow = reservationService.releaseNoShow(now);
             int finished = reservationService.finishExpired(now);
             List<Reservation> reminded = reservationService.remindEnding(now);
+            int pushed = pushReminders(reminded);
             // 超时未回执的开门指令置 EXPIRED：过期指令不得再被执行
             int expired = deviceCommandService.expireOverdue(now);
 
             if (pending > 0 || noShow > 0 || finished > 0 || !reminded.isEmpty() || expired > 0) {
-                log.info("预约状态收敛：待审批释放 {}，爽约释放 {}，到期结束 {}，提醒 {}，指令过期 {}",
-                        pending, noShow, finished, reminded.size(), expired);
+                log.info("预约状态收敛：待审批释放 {}，爽约释放 {}，到期结束 {}，提醒 {}（已下发 {}），指令过期 {}",
+                        pending, noShow, finished, reminded.size(), pushed, expired);
             }
         } catch (RuntimeException e) {
             // 单轮失败不能终止调度：把异常吞掉并记录，下一轮会重试（所有操作都是幂等的）
             log.error("预约状态收敛失败，将在下一轮重试", e);
         }
+    }
+
+    /**
+     * 结束前提醒下发到设备。
+     *
+     * <p>提醒是"锦上添花"，某一台下发失败不能影响其它台，也不能让整轮收敛失败 ——
+     * 因此逐条 try/catch，失败只记 warn。
+     */
+    private int pushReminders(List<Reservation> reservations) {
+        int pushed = 0;
+        for (Reservation r : reservations) {
+            try {
+                if (deviceNotifier.remind(r)) {
+                    pushed++;
+                }
+            } catch (RuntimeException e) {
+                log.warn("结束提醒下发失败：reservation={}", r.getId(), e);
+            }
+        }
+        return pushed;
     }
 
     /**

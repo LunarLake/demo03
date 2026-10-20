@@ -105,6 +105,7 @@ CREATE TABLE t_reservation (
     start_time       DATETIME     NOT NULL                COMMENT '预约开始时刻（必然对齐 15 分钟整点）',
     end_time         DATETIME     NOT NULL                COMMENT '预约结束时刻（必然对齐 15 分钟整点）',
     reservation_status TINYINT    NOT NULL DEFAULT 0      COMMENT '状态：0待审批 1已通过 2已拒绝 3已取消 5超时释放 6已签到 7已结束（4 已废弃）',
+    created_at       DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '提交时刻（24h 办结时限的起算点）',
     attendee_count   INT          DEFAULT NULL            COMMENT '参会人数（1..房间容量）',
     purpose          VARCHAR(200) DEFAULT NULL            COMMENT '用途说明（信用分 <70 转人工时必填）',
     decision_reason  VARCHAR(200) DEFAULT NULL            COMMENT '拒绝/取消/释放的原因，展示给申请人',
@@ -122,6 +123,7 @@ CREATE TABLE t_reservation (
     KEY idx_user_status (user_id, reservation_status)        COMMENT '我的预约分页筛选',
     KEY idx_status_start (reservation_status, start_time)    COMMENT '待审批列表 / 签到截止扫描 / 到期结束扫描',
     KEY idx_manual_due (reservation_status, approved_at)     COMMENT '人工审核 24h 超时预警',
+    KEY idx_created (reservation_status, created_at)          COMMENT '待审批超时扫描',
     KEY idx_device_display (room_id, reservation_status, start_time, end_time) COMMENT '设备屏幕当前有效预约查询'
 ) ENGINE = InnoDB
   DEFAULT CHARSET = utf8mb4

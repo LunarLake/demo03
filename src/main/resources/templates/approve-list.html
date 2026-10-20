@@ -25,6 +25,14 @@
             data-bs-dismiss="alert"
           ></button>
         </div>
+        <div
+          th:if="${overdue != null and overdue > 0}"
+          class="alert alert-warning"
+          role="alert"
+        >
+          有 <b th:text="${overdue}"></b> 笔申请已超过
+          <b th:text="${dueHours}"></b> 小时未处理，请尽快办结。
+        </div>
         <div class="card summary-card">
           <div class="card-header bg-white border-0">
             <h2 class="h5 mb-0">待审批预约</h2>

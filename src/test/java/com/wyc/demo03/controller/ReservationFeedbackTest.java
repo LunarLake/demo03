@@ -2,6 +2,7 @@ package com.wyc.demo03.controller;
 
 import com.wyc.demo03.service.AccessService;
 import com.wyc.demo03.service.RoomBoardService;
+import com.wyc.demo03.service.RuleConfigService;
 import com.wyc.demo03.service.MeetingRoomService;
 import com.wyc.demo03.service.ReservationService;
 import org.junit.jupiter.api.BeforeEach;
@@ -23,7 +24,7 @@ class ReservationFeedbackTest {
     @BeforeEach
     void setUp() {
         service = mock(ReservationService.class);
-        mvc = MockMvcBuilders.standaloneSetup(new ReservationController(service, mock(MeetingRoomService.class), mock(AccessService.class), mock(RoomBoardService.class)))
+        mvc = MockMvcBuilders.standaloneSetup(new ReservationController(service, mock(MeetingRoomService.class), mock(AccessService.class), mock(RoomBoardService.class), mock(RuleConfigService.class)))
                 .setViewResolvers(new InternalResourceViewResolver("/WEB-INF/views/", ".html")).build();
     }
 

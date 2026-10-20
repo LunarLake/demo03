@@ -56,6 +56,7 @@ class MqttAccessIntegrationTest {
     @Autowired private DeviceCommandMapper deviceCommandMapper;
     @Autowired private AccessLogMapper accessLogMapper;
     @Autowired private UserService userService;
+    @Autowired private com.wyc.demo03.simulator.DeviceSimulator simulator;
 
     private User student;
 
@@ -108,6 +109,24 @@ class MqttAccessIntegrationTest {
         List<AccessLog> logs = accessLogMapper.findByReservationId(r.getId());
         assertEquals(1, logs.size());
         assertEquals(1, logs.get(0).getGranted());
+    }
+
+    @Test
+    @DisplayName("批准 → 屏幕显示：自动通过后设备会收到快照并绑定当前预约")
+    void approvalPushesSnapshotToScreen() {
+        // 明天 10:00–11:00，人数 3、信用 100 → 自动通过
+        LocalDateTime start = java.time.LocalDate.now().plusDays(3).atTime(10, 0);
+        Reservation form = new Reservation();
+        form.setRoomId(1L);
+        form.setStartTime(start);
+        form.setEndTime(start.plusHours(1));
+        form.setAttendeeCount(3);
+
+        var result = reservationService.submit(form, student.getId(), "STUDENT");
+
+        assertEquals(com.wyc.demo03.domain.ReservationStatus.APPROVED, result.status());
+        assertEquals(result.reservationId(), simulator.displayedReservationId(),
+                "批准后屏幕应显示这笔预约（设备端据此做跨预约开锁校验）");
     }
 
     @Test

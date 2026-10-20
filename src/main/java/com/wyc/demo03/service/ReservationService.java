@@ -127,6 +127,9 @@ public interface ReservationService extends IService<Reservation> {
 
     Map<String, Object> findDetailById(Long id);
 
+    /** 超过办结时限仍未处理的待审批数量。 */
+    int countPendingOverdue(int dueHours);
+
     /** 某房间某日的有效预约（已通过 / 已签到）。 */
     List<Map<String, Object>> findScheduleByRoomAndDate(Long roomId, LocalDate date);
 

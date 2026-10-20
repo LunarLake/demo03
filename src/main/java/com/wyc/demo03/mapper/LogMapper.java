@@ -2,7 +2,11 @@ package com.wyc.demo03.mapper;
 
 import com.baomidou.mybatisplus.core.mapper.BaseMapper;
 import com.wyc.demo03.entity.Log;
+import org.apache.ibatis.annotations.Delete;
 import org.apache.ibatis.annotations.Mapper;
+import org.apache.ibatis.annotations.Param;
+
+import java.time.LocalDateTime;
 import org.apache.ibatis.annotations.Select;
 
 import java.util.List;
@@ -10,6 +14,10 @@ import java.util.Map;
 
 @Mapper
 public interface LogMapper extends BaseMapper<Log> {
+
+    /** 7 天滚动清理，返回删除行数。 */
+    @Delete("DELETE FROM t_log WHERE `timestamp` < #{before}")
+    int deleteBefore(@Param("before") LocalDateTime before);
     // 统计访问来源（User-Agent）分布，返回列表包含访问来源名称和对应的访问次数，按访问次数降序排序
     @Select("SELECT url AS label, COUNT(*) AS count FROM t_log GROUP BY url ORDER BY count DESC, label ASC")
     List<Map<String, Object>> countByUrl();
