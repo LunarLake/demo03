@@ -14,6 +14,8 @@ import org.springframework.context.event.EventListener;
 import org.springframework.stereotype.Component;
 
 import java.time.Clock;
+import java.time.Duration;
+import java.time.format.DateTimeFormatter;
 import java.time.LocalDateTime;
 
 /**
@@ -36,6 +38,9 @@ public class MqttMessageRouter {
     private final ObjectMapper objectMapper;
     private final Clock clock;
 
+    /** 入站消息允许的时钟偏差（秒）。超过即视为陈旧，不再采信。 */
+    private static final long FRESH_SECONDS = 90;
+
     @EventListener(ApplicationReadyEvent.class)
     public void subscribe() {
         gateway.subscribe(MqttTopics.SUBSCRIBE_ACK, mqttProperties.getQos(), this::onAck);
@@ -47,7 +52,7 @@ public class MqttMessageRouter {
     /** 指令回执。 */
     void onAck(String json) {
         MqttEnvelope envelope = parse(json);
-        Device device = verifiedDevice(envelope);
+        Device device = verifiedDevice(envelope, "ACK");
         if (device == null) {
             return;
         }
@@ -58,7 +63,9 @@ public class MqttMessageRouter {
         DeviceCommand.Status status = "OK".equals(resultCode)
                 ? DeviceCommand.Status.ACKED : DeviceCommand.Status.FAILED;
 
-        boolean updated = deviceCommandService.ack(envelope.getMsgId(), status, resultCode);
+        // 归属校验：指令必须属于这台设备，否则别的设备知道 msgId 就能代为结算
+        boolean updated = deviceCommandService.ackFromDevice(
+                envelope.getMsgId(), status, resultCode, device.getId());
         if (updated) {
             log.info("收到回执：device={} msgId={} result={}",
                     device.getDeviceCode(), envelope.getMsgId(), resultCode);
@@ -72,8 +79,13 @@ public class MqttMessageRouter {
     /** 心跳：只更新在线时间，不做业务判断。 */
     void onHeartbeat(String json) {
         MqttEnvelope envelope = parse(json);
-        Device device = verifiedDevice(envelope);
+        Device device = verifiedDevice(envelope, "HEARTBEAT");
         if (device == null) {
+            return;
+        }
+        // 时效校验：重放一条签名合法的旧心跳，不能让设备"起死回生"
+        if (!isFresh(envelope.getIssuedAt())) {
+            log.warn("心跳已过期，忽略：device={} issuedAt={}", device.getDeviceCode(), envelope.getIssuedAt());
             return;
         }
         deviceMapper.touchHeartbeat(device.getDeviceCode(), LocalDateTime.now(clock).withNano(0));
@@ -82,7 +94,7 @@ public class MqttMessageRouter {
     /** 设备事件：一期只记录，不自动改业务状态。 */
     void onEvent(String json) {
         MqttEnvelope envelope = parse(json);
-        Device device = verifiedDevice(envelope);
+        Device device = verifiedDevice(envelope, "EVENT");
         if (device == null) {
             return;
         }
@@ -102,10 +114,21 @@ public class MqttMessageRouter {
     }
 
     /**
-     * 设备存在 + deviceCode 与会话一致 + HMAC 通过，三者缺一即丢弃。
+     * 设备存在 + 协议版本受支持 + 消息类型符合预期 + HMAC 通过，缺一即丢弃。
+     *
+     * @param expectedType 期望的消息类型；不匹配直接丢弃，避免把 cmd 当 ack 处理
      */
-    private Device verifiedDevice(MqttEnvelope envelope) {
-        if (envelope == null || envelope.getDeviceCode() == null) {
+    private Device verifiedDevice(MqttEnvelope envelope, String expectedType) {
+        if (envelope == null || envelope.getDeviceCode() == null
+                || envelope.getV() == null || envelope.getV() != MqttEnvelope.VERSION) {
+            log.warn("协议版本不支持或缺失，丢弃：device={} v={}",
+                    envelope == null ? null : envelope.getDeviceCode(),
+                    envelope == null ? null : envelope.getV());
+            return null;
+        }
+        if (!expectedType.equalsIgnoreCase(envelope.getType())) {
+            log.warn("消息类型不符，丢弃：期望 {} 实际 {}（device={}）",
+                    expectedType, envelope.getType(), envelope.getDeviceCode());
             return null;
         }
         Device device = deviceMapper.findByCode(envelope.getDeviceCode());
@@ -119,6 +142,19 @@ public class MqttMessageRouter {
             return null;
         }
         return device;
+    }
+
+    /** issuedAt 是否在允许的时钟偏差内（默认 90 秒，与心跳超时一致）。 */
+    private boolean isFresh(String issuedAt) {
+        if (issuedAt == null) {
+            return false;
+        }
+        try {
+            LocalDateTime issued = LocalDateTime.parse(issuedAt, DateTimeFormatter.ISO_LOCAL_DATE_TIME);
+            return Math.abs(Duration.between(issued, LocalDateTime.now(clock)).getSeconds()) <= FRESH_SECONDS;
+        } catch (RuntimeException e) {
+            return false;
+        }
     }
 
     /** 从扁平载荷里取一个字段（{@code k=v;k=v}）。 */

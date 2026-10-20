@@ -5,6 +5,7 @@ import com.wyc.demo03.entity.Appeal;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
 import org.apache.ibatis.annotations.Select;
+import org.apache.ibatis.annotations.Update;
 
 import java.time.LocalDateTime;
 import java.util.List;
@@ -30,6 +31,21 @@ public interface AppealMapper extends BaseMapper<Appeal> {
             + "LEFT JOIN t_meeting_room m ON m.id = r.room_id "
             + "WHERE a.status = #{status} ORDER BY a.due_at ASC")
     List<Map<String, Object>> findByStatus(@Param("status") String status);
+
+    /**
+     * 抢占式复核：只有仍处于 SUBMITTED 的工单能被改。
+     *
+     * <p>两个并发复核请求各自读到"未处理"，如果直接 updateById 会双双成功，
+     * 信用对冲就可能执行两次。用带前置状态的条件更新，受影响行数只有 1 个赢家（BUG-011）。
+     */
+    @Update("UPDATE t_appeal SET status = #{status}, reviewer_id = #{reviewerId}, "
+            + "review_note = #{reviewNote}, decided_at = #{decidedAt} "
+            + "WHERE id = #{id} AND status = 'SUBMITTED'")
+    int decideIfSubmitted(@Param("id") Long id,
+                          @Param("status") String status,
+                          @Param("reviewerId") Long reviewerId,
+                          @Param("reviewNote") String reviewNote,
+                          @Param("decidedAt") LocalDateTime decidedAt);
 
     /** 超过应办结时间仍未处理的数量，用于后台告警。 */
     @Select("SELECT COUNT(*) FROM t_appeal WHERE status = 'SUBMITTED' AND due_at < #{now}")

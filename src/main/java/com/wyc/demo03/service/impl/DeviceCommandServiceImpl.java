@@ -53,6 +53,13 @@ public class DeviceCommandServiceImpl implements DeviceCommandService {
 
     @Override
     @Transactional(rollbackFor = Exception.class)
+    public boolean ackFromDevice(String msgId, DeviceCommand.Status status, String resultCode, Long deviceId) {
+        return deviceCommandMapper.ackFromDevice(msgId, status.name(), resultCode,
+                LocalDateTime.now(clock).withNano(0), deviceId) == 1;
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
     public int expireOverdue(LocalDateTime now) {
         return deviceCommandMapper.expireOverdue(now);
     }

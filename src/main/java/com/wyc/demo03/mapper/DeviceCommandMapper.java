@@ -20,6 +20,19 @@ public interface DeviceCommandMapper extends BaseMapper<DeviceCommand> {
     @Update("UPDATE t_device_command SET status = 'SENT' WHERE msg_id = #{msgId} AND status = 'PENDING'")
     int markSent(@Param("msgId") String msgId);
 
+    /**
+     * 设备回执（带归属校验）：除 SENT 状态外，还要求 msgId 属于该设备。
+     *
+     * <p>否则 B 设备只要知道 A 的 msgId，就能把 A 的指令结算成自己的结果（BUG-012）。
+     */
+    @Update("UPDATE t_device_command SET status = #{status}, result_code = #{resultCode}, acked_at = #{ackedAt} "
+            + "WHERE msg_id = #{msgId} AND status = 'SENT' AND device_id = #{deviceId}")
+    int ackFromDevice(@Param("msgId") String msgId,
+                      @Param("status") String status,
+                      @Param("resultCode") String resultCode,
+                      @Param("ackedAt") LocalDateTime ackedAt,
+                      @Param("deviceId") Long deviceId);
+
     /** 设备回执：只有仍处于 SENT 的指令才接受回执，避免迟到回执覆盖已结算的状态。 */
     @Update("UPDATE t_device_command SET status = #{status}, result_code = #{resultCode}, acked_at = #{ackedAt} "
             + "WHERE msg_id = #{msgId} AND status = 'SENT'")

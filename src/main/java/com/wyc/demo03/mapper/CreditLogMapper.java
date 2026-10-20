@@ -13,6 +13,10 @@ import java.util.Map;
 @Mapper
 public interface CreditLogMapper extends BaseMapper<CreditLog> {
 
+    /** 某个申诉是否已经产生过对冲流水（保证对冲幂等）。 */
+    @Select("SELECT COUNT(*) FROM t_credit_log WHERE appeal_id = #{appealId}")
+    int countByAppealId(@Param("appealId") Long appealId);
+
     /**
      * 流水合计。信用分 = clamp(100 + SUM(delta), 0, 100)。
      * 用账本重算而不是累加缓存，保证任何一次写入失败都能自愈。

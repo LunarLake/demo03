@@ -3,6 +3,7 @@ package com.wyc.demo03.service.impl;
 import com.wyc.demo03.entity.Appeal;
 import com.wyc.demo03.entity.AuditLog;
 import com.wyc.demo03.entity.CreditLog;
+import com.wyc.demo03.domain.ReservationStatus;
 import com.wyc.demo03.entity.Reservation;
 import com.wyc.demo03.mapper.AppealMapper;
 import com.wyc.demo03.mapper.AuditLogMapper;
@@ -117,16 +118,24 @@ public class AppealServiceImpl implements AppealService {
         }
 
         LocalDateTime now = LocalDateTime.now(clock);
+        String reviewNote = note == null || note.isBlank() ? status.label() : note.trim();
+
+        // ★ 抢占式更新：只有第一个把 SUBMITTED 改掉的人算赢家，后面的人拿到 0 行直接退出，
+        //   不会出现两个复核都成功、信用被对冲两次（BUG-011）
+        if (appealMapper.decideIfSubmitted(appealId, status.name(), reviewerId, reviewNote, now) != 1) {
+            throw new IllegalStateException("该工单已被其他管理员处理，请刷新后查看");
+        }
         appeal.setStatus(status.name());
         appeal.setReviewerId(reviewerId);
-        appeal.setReviewNote(note == null || note.isBlank() ? status.label() : note.trim());
+        appeal.setReviewNote(reviewNote);
         appeal.setDecidedAt(now);
-        if (appealMapper.updateById(appeal) != 1) {
-            throw new IllegalStateException("工单状态已变化，请刷新后重试");
-        }
 
         // 申诉成立且对象是信用扣分 → 对冲原扣分（注意：不恢复房间单元）
         if (status == Appeal.Status.REVOKED && Appeal.TargetType.CREDIT.name().equals(appeal.getTargetType())) {
+            // 对冲幂等：同一申诉只能产生一笔撤销流水
+            if (creditLogMapper.countByAppealId(appealId) > 0) {
+                log.warn("申诉 {} 已存在对冲流水，跳过重复撤销", appealId);
+            } else {
             CreditLog original = creditLogMapper.selectById(appeal.getTargetId());
             if (original != null && original.getDelta() != null && original.getDelta() != 0) {
                 // ★ 原因码必须用 APPEAL_REVOKE，不能沿用原原因：
@@ -138,6 +147,7 @@ public class AppealServiceImpl implements AppealService {
                         -original.getDelta(), null, appeal.getId(), "REVIEWER",
                         "申诉成立，撤销第 " + original.getId() + " 条扣分（原 "
                                 + original.getReasonCode() + " " + original.getDelta() + " 分）");
+            }
             }
         }
 
@@ -165,6 +175,14 @@ public class AppealServiceImpl implements AppealService {
             if (!userId.equals(r.getUserId())) {
                 throw new IllegalArgumentException("只能对自己的预约提交申诉");
             }
+            // 只允许对"有不利结论"的预约申诉：已拒绝 / 已取消 / 超时释放。
+            // 已通过、已签到、已结束的预约没有可诉的结论，允许申诉只会产生无效工单（BUG-011）
+            ReservationStatus status = r.statusOrNull();
+            if (status != ReservationStatus.REJECTED
+                    && status != ReservationStatus.CANCELED
+                    && status != ReservationStatus.TIMEOUT_RELEASED) {
+                throw new IllegalArgumentException("只有被拒绝、已取消或超时释放的预约可以申诉");
+            }
             LocalDateTime base = r.getClosedAt() != null ? r.getClosedAt() : r.getEndTime();
             if (base != null && now.isAfter(base.plusDays(APPEAL_WINDOW_DAYS))) {
                 throw new IllegalArgumentException("已超过 7 日申诉期限");
@@ -181,6 +199,10 @@ public class AppealServiceImpl implements AppealService {
         }
         if (!userId.equals(entry.getUserId())) {
             throw new IllegalArgumentException("只能对自己的扣分提交申诉");
+        }
+        // 只接受负向扣分：对加分申诉，成立后反而会把分数扣回去
+        if (entry.getDelta() == null || entry.getDelta() >= 0) {
+            throw new IllegalArgumentException("只能对扣分记录提交申诉");
         }
         if (entry.getCreatedAt() != null && now.isAfter(entry.getCreatedAt().plusDays(APPEAL_WINDOW_DAYS))) {
             throw new IllegalArgumentException("已超过 7 日申诉期限");

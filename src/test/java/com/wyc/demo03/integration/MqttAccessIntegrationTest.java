@@ -64,6 +64,10 @@ class MqttAccessIntegrationTest {
     void setUp() {
         student = userService.lambdaQuery().eq(User::getUsername, "student01").one();
         assertNotNull(student);
+
+        // BUG-012：只有 Broker 连着不算设备可达，必须有心跳把 online 置 1。
+        // 真实场景里设备上电就会发心跳，这里显式补一次，让前置状态与现场一致。
+        simulator.heartbeat();
     }
 
     private Reservation insertApprovedNow() {
@@ -172,11 +176,11 @@ class MqttAccessIntegrationTest {
         String result = reservationService.checkIn(r.getId(), student.getId(), "4321", "127.0.0.1");
         assertEquals("success", result, "签到本身只落库");
 
+        // BUG-012：room 2 的设备从未上报心跳（online=0），Broker 在线也不代表可达，
+        // 因此不下发指令，而是明确拒绝为门禁离线
         var unlock = accessService.openAfterCheckIn(r.getId(), student.getId(), "127.0.0.1");
-        assertEquals("SENT", unlock.commandStatus(), "没有设备回执时必须如实说等待，不能谎报已开锁");
-        List<DeviceCommand> cmds = commands(r.getId());
-        assertEquals(1, cmds.size());
-        assertEquals("SENT", cmds.get(0).getStatus());
+        assertEquals("DEVICE_OFFLINE", unlock.denyReason(), "设备离线时不应假装下发");
+        assertTrue(commands(r.getId()).isEmpty(), "离线设备不产生指令");
 
         // 但签到本身必须成功
         assertEquals(ReservationStatus.CHECKED_IN.code(),

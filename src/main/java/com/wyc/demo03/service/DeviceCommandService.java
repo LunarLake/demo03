@@ -27,6 +27,13 @@ public interface DeviceCommandService {
     /** 设备回执；只有仍处于 SENT 的指令才接受，迟到回执不会覆盖已结算状态。 */
     boolean ack(String msgId, DeviceCommand.Status status, String resultCode);
 
+    /**
+     * 设备侧回执：额外要求指令属于该设备，防止跨设备结算别人的指令。
+     *
+     * @return false 表示 msgId 不存在、已结算，或不属于该设备
+     */
+    boolean ackFromDevice(String msgId, DeviceCommand.Status status, String resultCode, Long deviceId);
+
     /** 超时未回执的置为 EXPIRED，返回处理条数。 */
     int expireOverdue(LocalDateTime now);
 

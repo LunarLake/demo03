@@ -19,6 +19,7 @@ import java.time.LocalDateTime;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
@@ -99,7 +100,7 @@ class MqttRoundTripTest {
     }
 
     private void assertAckSettled(String msgId, DeviceCommand.Status expected) {
-        verify(commandService).ack(eq(msgId), eq(expected), anyString());
+        verify(commandService).ackFromDevice(eq(msgId), eq(expected), anyString(), eq(device.getId()));
     }
 
     // ====================================================================
@@ -134,8 +135,8 @@ class MqttRoundTripTest {
         door.dispatch(device, cmd);
 
         // 第一次 ACKED，第二次 ERR_DUP
-        verify(commandService).ack(eq("msg-dup"), eq(DeviceCommand.Status.ACKED), eq("OK"));
-        verify(commandService).ack(eq("msg-dup"), eq(DeviceCommand.Status.FAILED), eq("ERR_DUP"));
+        verify(commandService).ackFromDevice(eq("msg-dup"), eq(DeviceCommand.Status.ACKED), eq("OK"), any());
+        verify(commandService).ackFromDevice(eq("msg-dup"), eq(DeviceCommand.Status.FAILED), eq("ERR_DUP"), any());
     }
 
     @Test
@@ -155,7 +156,7 @@ class MqttRoundTripTest {
         gateway.publish(MqttTopics.cmd(DEVICE_CODE), toJson(forged), 1, false);
 
         assertAckSettled("msg-forged", DeviceCommand.Status.FAILED);
-        verify(commandService, never()).ack(eq("msg-forged"), eq(DeviceCommand.Status.ACKED), anyString());
+        verify(commandService, never()).ackFromDevice(eq("msg-forged"), eq(DeviceCommand.Status.ACKED), anyString(), any());
     }
 
     @Test
@@ -178,7 +179,7 @@ class MqttRoundTripTest {
         door.dispatch(device, cmd);
 
         assertAckSettled("msg-cross", DeviceCommand.Status.FAILED);
-        verify(commandService, never()).ack(eq("msg-cross"), eq(DeviceCommand.Status.ACKED), anyString());
+        verify(commandService, never()).ackFromDevice(eq("msg-cross"), eq(DeviceCommand.Status.ACKED), anyString(), any());
     }
 
     @Test
@@ -208,7 +209,58 @@ class MqttRoundTripTest {
         MqttDoorController offlineDoor = new MqttDoorController(disconnected, mqttProperties, objectMapper);
 
         assertEquals(DispatchResult.FAILED, offlineDoor.dispatch(device, command("msg-off", 42L, T0.plusSeconds(30))));
-        verify(commandService, never()).ack(anyString(), any(), anyString());
+        verify(commandService, never()).ackFromDevice(anyString(), any(), anyString(), any());
+    }
+
+    @Test
+    @DisplayName("BUG-012 陈旧心跳不能把设备重新点亮")
+    void staleHeartbeatIsIgnored() {
+        MqttEnvelope stale = new MqttEnvelope();
+        stale.setV(1);
+        stale.setType("HEARTBEAT");
+        stale.setDeviceCode(DEVICE_CODE);
+        stale.setMsgId("hb-old");
+        stale.setIssuedAt(T0.minusHours(2).toString());
+        stale.setExpiresAt(T0.minusHours(2).plusSeconds(120).toString());
+        stale.setPayload("uptime=1");
+        stale.setHmac(stale.sign(SECRET));
+        gateway.publish(MqttTopics.heartbeat(DEVICE_CODE), toJson(stale), 0, false);
+
+        verify(deviceMapper, never()).touchHeartbeat(anyString(), any());
+    }
+
+    @Test
+    @DisplayName("BUG-012 不支持的协议版本被拒绝")
+    void unsupportedVersionIsRejected() {
+        MqttEnvelope bad = new MqttEnvelope();
+        bad.setV(99);
+        bad.setType("HEARTBEAT");
+        bad.setDeviceCode(DEVICE_CODE);
+        bad.setMsgId("hb-v99");
+        bad.setIssuedAt(T0.toString());
+        bad.setExpiresAt(T0.plusSeconds(120).toString());
+        bad.setPayload("uptime=1");
+        bad.setHmac(bad.sign(SECRET));
+        gateway.publish(MqttTopics.heartbeat(DEVICE_CODE), toJson(bad), 0, false);
+
+        verify(deviceMapper, never()).touchHeartbeat(anyString(), any());
+    }
+
+    @Test
+    @DisplayName("BUG-012 消息类型不符（把 cmd 当 ack）被拒绝")
+    void wrongTypeIsRejected() {
+        MqttEnvelope wrong = new MqttEnvelope();
+        wrong.setV(1);
+        wrong.setType("CMD");
+        wrong.setDeviceCode(DEVICE_CODE);
+        wrong.setMsgId("msg-1");
+        wrong.setIssuedAt(T0.toString());
+        wrong.setExpiresAt(T0.plusSeconds(120).toString());
+        wrong.setPayload("resultCode=OK");
+        wrong.setHmac(wrong.sign(SECRET));
+        gateway.publish(MqttTopics.ack(DEVICE_CODE), toJson(wrong), 1, false);
+
+        verify(commandService, never()).ackFromDevice(anyString(), any(), anyString(), any());
     }
 
     @Test
@@ -231,7 +283,7 @@ class MqttRoundTripTest {
         forged.setHmac("deadbeef");
         gateway.publish(MqttTopics.ack(DEVICE_CODE), toJson(forged), 1, false);
 
-        verify(commandService, never()).ack(eq("msg-1"), eq(DeviceCommand.Status.ACKED), anyString());
+        verify(commandService, never()).ackFromDevice(eq("msg-1"), eq(DeviceCommand.Status.ACKED), anyString(), any());
     }
 
     private String toJson(MqttEnvelope envelope) {

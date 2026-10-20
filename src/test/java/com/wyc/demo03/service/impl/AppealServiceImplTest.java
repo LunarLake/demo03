@@ -26,6 +26,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -97,6 +98,45 @@ class AppealServiceImplTest {
         IllegalArgumentException ex = assertThrows(IllegalArgumentException.class,
                 () -> service.submit(APPLICANT, Appeal.TargetType.RESERVATION, 42L, "我有异议", null));
         assertTrue(ex.getMessage().contains("7 日"));
+    }
+
+    @Test
+    @DisplayName("BUG-011 已通过的预约不能申诉（没有可诉的不利结论）")
+    void rejectsAppealOnApprovedReservation() {
+        when(reservationMapper.selectById(42L)).thenReturn(reservation(APPLICANT, 1));
+
+        IllegalArgumentException ex = assertThrows(IllegalArgumentException.class,
+                () -> service.submit(APPLICANT, Appeal.TargetType.RESERVATION, 42L, "我想改一下", null));
+        assertTrue(ex.getMessage().contains("只有被拒绝"));
+    }
+
+    @Test
+    @DisplayName("BUG-011 正向加分流水不能申诉（否则成立后反而扣分）")
+    void rejectsAppealOnPositiveCredit() {
+        CreditLog bonus = new CreditLog();
+        bonus.setId(6L);
+        bonus.setUserId(APPLICANT);
+        bonus.setDelta(5);
+        bonus.setReasonCode("CLEAN_30D");
+        bonus.setCreatedAt(T0.minusDays(1));
+        when(creditLogMapper.selectById(6L)).thenReturn(bonus);
+
+        IllegalArgumentException ex = assertThrows(IllegalArgumentException.class,
+                () -> service.submit(APPLICANT, Appeal.TargetType.CREDIT, 6L, "我不该被加分", null));
+        assertTrue(ex.getMessage().contains("只能对扣分"));
+    }
+
+    @Test
+    @DisplayName("BUG-011 并发复核：抢占失败的请求不能再执行对冲")
+    void loserOfConcurrentReviewDoesNotReverse() {
+        when(appealMapper.selectById(100L)).thenReturn(submitted(APPLICANT, "CREDIT", 5L));
+        when(appealMapper.decideIfSubmitted(anyLong(), anyString(), anyLong(), anyString(), any()))
+                .thenReturn(0);
+
+        IllegalStateException ex = assertThrows(IllegalStateException.class,
+                () -> service.decide(100L, REVIEWER, Appeal.Status.REVOKED, "改判"));
+        assertTrue(ex.getMessage().contains("已被其他管理员处理"));
+        verify(creditService, never()).adjust(anyLong(), any(), any(), any(), any(), any(), any());
     }
 
     @Test
@@ -178,7 +218,7 @@ class AppealServiceImplTest {
         IllegalStateException ex = assertThrows(IllegalStateException.class,
                 () -> service.decide(100L, REVIEWER, Appeal.Status.UPHELD, "维持"));
         assertTrue(ex.getMessage().contains("原审核人"));
-        verify(appealMapper, never()).updateById(any(Appeal.class));
+        verify(appealMapper, never()).decideIfSubmitted(anyLong(), anyString(), anyLong(), anyString(), any());
     }
 
     @Test
@@ -211,7 +251,7 @@ class AppealServiceImplTest {
         original.setReasonCode("NO_SHOW");
         original.setReservationId(42L);
         when(creditLogMapper.selectById(5L)).thenReturn(original);
-        when(appealMapper.updateById(any(Appeal.class))).thenReturn(1);
+        when(appealMapper.decideIfSubmitted(anyLong(), anyString(), anyLong(), anyString(), any())).thenReturn(1);
 
         Appeal result = service.decide(100L, REVIEWER, Appeal.Status.REVOKED, "签到记录有误");
 
@@ -239,7 +279,7 @@ class AppealServiceImplTest {
         original.setDelta(-10);
         original.setReasonCode("NO_SHOW");
         when(creditLogMapper.selectById(5L)).thenReturn(original);
-        when(appealMapper.updateById(any(Appeal.class))).thenReturn(1);
+        when(appealMapper.decideIfSubmitted(anyLong(), anyString(), anyLong(), anyString(), any())).thenReturn(1);
 
         service.decide(100L, REVIEWER, Appeal.Status.UPHELD, "事实清楚");
 

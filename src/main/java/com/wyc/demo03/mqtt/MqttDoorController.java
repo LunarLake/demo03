@@ -42,8 +42,11 @@ public class MqttDoorController implements DoorController {
 
     @Override
     public boolean reachable(Device device) {
-        // 设备在线由心跳看门狗维护；Broker 断连时一律视为不可达
-        return device != null && gateway.isConnected();
+        // Broker 连着不代表设备在线：设备可能早已掉电，靠心跳看门狗维护 online 标记。
+        // 只看 gateway.isConnected() 会把离线设备的指令一直发到 Broker 里（BUG-012）
+        return device != null
+                && gateway.isConnected()
+                && Integer.valueOf(1).equals(device.getOnline());
     }
 
     @Override
