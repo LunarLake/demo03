@@ -89,6 +89,7 @@
                     th:text="${#temporals.format(r['end_time'], 'yyyy-MM-dd HH:mm')}"
                   ></td>
                   <td>
+                    <!-- 7 态徽章：0 待审批 / 1 已通过 / 2 已拒绝 / 3 已取消 / 5 超时释放 / 6 已签到 / 7 已结束 -->
                     <span
                       th:if="${r['reservation_status'] == 0}"
                       class="badge bg-warning"
@@ -100,6 +101,16 @@
                       >已通过</span
                     >
                     <span
+                      th:if="${r['reservation_status'] == 6}"
+                      class="badge bg-primary"
+                      >已签到</span
+                    >
+                    <span
+                      th:if="${r['reservation_status'] == 7}"
+                      class="badge bg-secondary"
+                      >已结束</span
+                    >
+                    <span
                       th:if="${r['reservation_status'] == 2}"
                       class="badge bg-danger"
                       >已拒绝</span
@@ -107,30 +118,28 @@
                     <span
                       th:if="${r['reservation_status'] == 3}"
                       class="badge bg-secondary"
-                      >被覆盖取消</span
-                    >
-                    <span
-                      th:if="${r['reservation_status'] == 4}"
-                      class="badge bg-dark"
+                      th:text="${r['cancel_source'] == 'TEACHER_OVERRIDE'} ? '已被教师覆盖' : '已取消'"
                       >已取消</span
                     >
                     <span
                       th:if="${r['reservation_status'] == 5}"
-                      class="badge bg-secondary"
+                      class="badge bg-danger"
                       >超时释放</span
                     >
                     <div
-                      th:if="${r['reservation_status'] == 2 and r['reject_reason'] != null}"
+                      th:if="${r['decision_reason'] != null and (r['reservation_status'] == 2 or r['reservation_status'] == 3 or r['reservation_status'] == 5)}"
                       class="small text-muted mt-1"
-                      th:text="'原因：' + ${r['reject_reason']}"
+                      th:text="'原因：' + ${r['decision_reason']}"
                     ></div>
                   </td>
                   <td>
-                    <span
-                      th:if="${r['check_in_code'] != null}"
-                      th:text="${r['check_in_code']}"
-                    ></span>
-                    <span th:unless="${r['check_in_code'] != null}">—</span>
+                    <span th:if="${r['checkInCode'] != null}" th:text="${r['checkInCode']}"></span>
+                    <span th:unless="${r['checkInCode'] != null}">—</span>
+                    <div
+                      th:if="${r['checkInCode'] != null and r['codeRevokedAt'] != null}"
+                      class="small text-muted"
+                      >已失效</div
+                    >
                   </td>
                   <td>
                     <span

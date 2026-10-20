@@ -1,38 +1,55 @@
 package com.wyc.demo03.task;
 
 import com.wyc.demo03.entity.Reservation;
-import com.wyc.demo03.mapper.ReservationMapper;
 import com.wyc.demo03.service.ReservationService;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
+import java.time.Clock;
 import java.time.LocalDateTime;
 import java.util.List;
 
+/**
+ * 预约状态收敛（每 60 秒一次，文档 3.2.4）。
+ *
+ * <p>四件事按"先释放、再结束、最后提醒"的顺序做，避免同一笔预约在同一轮里
+ * 既被判爽约又被判结束：
+ * <ol>
+ *   <li>待审批到了开始时刻仍未处理 → 超时释放</li>
+ *   <li>已通过但签到截止（开始后 5 分钟）仍未签到 → 超时释放</li>
+ *   <li>到达结束时刻 → 已结束</li>
+ *   <li>结束前 5 分钟 → 登记提醒（P5 接设备后在此下发屏幕/蜂鸣）</li>
+ * </ol>
+ *
+ * <p>扫描存在最多一个周期（约 60 秒）的正常延迟。因此<b>授权判定不依赖定时任务是否已跑</b>：
+ * 签到与开门都用当前时间直接校验窗口，状态只是"展示用的事实"。
+ */
+@Slf4j
 @Component
+@RequiredArgsConstructor
 public class ReservationScheduler {
 
-    private final ReservationMapper reservationMapper;
     private final ReservationService reservationService;
-
-    public ReservationScheduler(ReservationMapper reservationMapper, ReservationService reservationService) {
-        this.reservationMapper = reservationMapper;
-        this.reservationService = reservationService;
-    }
+    private final Clock clock;
 
     @Scheduled(fixedDelay = 60_000)
-    public void releaseZombieReservations() {
-        LocalDateTime now = LocalDateTime.now();
-        // 待审批申请过了开始时间即失效；条件更新不会覆盖已经处理的申请。
-        reservationMapper.releaseExpiredPending(now);
-        LocalDateTime cutoff = now.minusMinutes(15);
-        List<Reservation> zombies = reservationMapper.findExpiredUnchecked(cutoff);
-        for (Reservation r : zombies) {
-            reservationService.lambdaUpdate()
-                    .eq(Reservation::getId, r.getId())
-                    .eq(Reservation::getReservationStatus, 1)
-                    .set(Reservation::getReservationStatus, 5)
-                    .update();
+    public void converge() {
+        LocalDateTime now = LocalDateTime.now(clock);
+        try {
+            int pending = reservationService.releasePendingStarted(now);
+            int noShow = reservationService.releaseNoShow(now);
+            int finished = reservationService.finishExpired(now);
+            List<Reservation> reminded = reservationService.remindEnding(now);
+
+            if (pending > 0 || noShow > 0 || finished > 0 || !reminded.isEmpty()) {
+                log.info("预约状态收敛：待审批释放 {}，爽约释放 {}，到期结束 {}，提醒 {}",
+                        pending, noShow, finished, reminded.size());
+            }
+        } catch (RuntimeException e) {
+            // 单轮失败不能终止调度：把异常吞掉并记录，下一轮会重试（所有操作都是幂等的）
+            log.error("预约状态收敛失败，将在下一轮重试", e);
         }
     }
 }

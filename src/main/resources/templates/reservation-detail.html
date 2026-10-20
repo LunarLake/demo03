@@ -21,13 +21,22 @@
                             <tr><td class="text-muted">结束时间</td><td th:text="${#strings.substring(detail['end_time'].toString(), 0, 16)}"></td></tr>
                             <tr><td class="text-muted">预约状态</td><td>
                                 <span th:if="${detail['reservation_status'] == 0}" class="badge bg-warning">待审批</span>
-                                <span th:if="${detail['reservation_status'] == 1}" class="badge bg-success">已批准</span>
+                                <span th:if="${detail['reservation_status'] == 1}" class="badge bg-success">已通过</span>
                                 <span th:if="${detail['reservation_status'] == 2}" class="badge bg-danger">已拒绝</span>
-                                <span th:if="${detail['reservation_status'] == 3}" class="badge bg-secondary">被覆盖取消</span>
-                                <span th:if="${detail['reservation_status'] == 4}" class="badge bg-dark">已取消</span>
+                                <span th:if="${detail['reservation_status'] == 3}" class="badge bg-secondary"
+                                      th:text="${detail['cancel_source'] == 'TEACHER_OVERRIDE'} ? '已被教师覆盖' : '已取消'">已取消</span>
                                 <span th:if="${detail['reservation_status'] == 5}" class="badge bg-secondary">超时释放</span>
+                                <span th:if="${detail['reservation_status'] == 6}" class="badge bg-primary">已签到</span>
+                                <span th:if="${detail['reservation_status'] == 7}" class="badge bg-secondary">已结束</span>
                             </td></tr>
-                            <tr th:if="${detail['check_in_code'] != null}"><td class="text-muted">签到码</td><td th:text="${detail['check_in_code']}"></td></tr>
+                            <tr th:if="${detail['decision_path'] != null}"><td class="text-muted">判定路径</td><td th:text="${detail['decision_path']}"></td></tr>
+                            <tr th:if="${detail['hit_rule_codes'] != null}"><td class="text-muted">命中规则</td><td th:text="${detail['hit_rule_codes']}"></td></tr>
+                            <tr th:if="${detail['decision_reason'] != null}"><td class="text-muted">处理原因</td><td th:text="${detail['decision_reason']}"></td></tr>
+                            <tr th:if="${detail['checkInCode'] != null}"><td class="text-muted">签到码</td>
+                                <td><span th:text="${detail['checkInCode']}"></span>
+                                    <span th:if="${detail['codeRevokedAt'] != null}" class="badge bg-secondary ms-1">已失效</span>
+                                </td>
+                            </tr>
                         </table>
                     </div>
                 </div>

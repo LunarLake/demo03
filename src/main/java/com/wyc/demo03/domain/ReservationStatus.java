@@ -73,6 +73,10 @@ public enum ReservationStatus {
     private static final Set<ReservationStatus> TERMINAL =
             Collections.unmodifiableSet(EnumSet.of(REJECTED, CANCELED, TIMEOUT_RELEASED, FINISHED));
 
+    /** 进行中（未终止）的状态：待审批、已通过、已签到。 */
+    private static final Set<ReservationStatus> ACTIVE =
+            Collections.unmodifiableSet(EnumSet.of(PENDING, APPROVED, CHECKED_IN));
+
     private static final Map<ReservationStatus, Set<ReservationStatus>> ALLOWED;
 
     static {
@@ -140,6 +144,21 @@ public enum ReservationStatus {
     /** 是否终止态（不再接受任何迁移）。 */
     public boolean isTerminal() {
         return TERMINAL.contains(this);
+    }
+
+    /** 是否进行中（未终止）。 */
+    public boolean isActive() {
+        return ACTIVE.contains(this);
+    }
+
+    /**
+     * 进行中状态的码集合，供 "IN (...)" 类查询使用。
+     *
+     * <p>把 v1 里散落的 {@code IN (0, 1)} 收口到这里：v2 新增了「已签到」，
+     * 任何仍写死 {@code (0, 1)} 的地方都会漏掉已签到的预约 —— 例如房间删除守卫。
+     */
+    public static Set<Integer> activeCodes() {
+        return ACTIVE.stream().map(ReservationStatus::code).collect(java.util.stream.Collectors.toSet());
     }
 
     /**

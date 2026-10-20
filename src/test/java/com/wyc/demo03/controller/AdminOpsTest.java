@@ -148,46 +148,7 @@ class AdminOpsTest {
     }
 
     // ============ ReservationScheduler ============
-
-    @Test
-    void schedulerReleasesZombieReservations() {
-        // Arrange
-        ReservationMapper mapper = mock(ReservationMapper.class);
-        ReservationService reservationService = mock(ReservationService.class);
-        ReservationScheduler scheduler = new ReservationScheduler(mapper, reservationService);
-
-        com.wyc.demo03.entity.Reservation zombie = new com.wyc.demo03.entity.Reservation();
-        zombie.setId(1L);
-        zombie.setReservationStatus(1);
-        when(mapper.findExpiredUnchecked(any())).thenReturn(List.of(zombie));
-
-        com.baomidou.mybatisplus.extension.conditions.update.LambdaUpdateChainWrapper<com.wyc.demo03.entity.Reservation> chain =
-                mock(com.baomidou.mybatisplus.extension.conditions.update.LambdaUpdateChainWrapper.class);
-        when(reservationService.lambdaUpdate()).thenReturn(chain);
-        when(chain.eq(any(), any())).thenReturn(chain);
-        when(chain.set(any(), any())).thenReturn(chain);
-        when(chain.update()).thenReturn(true);
-
-        // Act
-        scheduler.releaseZombieReservations();
-
-        // Assert
-        verify(mapper).findExpiredUnchecked(any());
-        verify(chain).update();
-    }
-
-    @Test
-    void schedulerDoesNothingWhenNoZombies() {
-        // Arrange
-        ReservationMapper mapper = mock(ReservationMapper.class);
-        ReservationService reservationService = mock(ReservationService.class);
-        ReservationScheduler scheduler = new ReservationScheduler(mapper, reservationService);
-        when(mapper.findExpiredUnchecked(any())).thenReturn(List.of());
-
-        // Act：无僵尸预约时不抛异常
-        scheduler.releaseZombieReservations();
-
-        // Assert
-        verify(reservationService, never()).lambdaUpdate();
-    }
+    // 调度器编排的行为测试已迁到 com.wyc.demo03.task.ReservationExpiryTest
+    // （v1 在 AdminOpsTest 里重复测了一遍调度器，v2 起统一收口到 task 包）。
 }
+

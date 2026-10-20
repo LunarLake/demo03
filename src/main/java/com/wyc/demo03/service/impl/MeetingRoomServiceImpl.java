@@ -2,6 +2,7 @@ package com.wyc.demo03.service.impl;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
+import com.wyc.demo03.domain.ReservationStatus;
 import com.wyc.demo03.entity.MeetingRoom;
 import com.wyc.demo03.entity.Reservation;
 import com.wyc.demo03.mapper.MeetingRoomMapper;
@@ -26,7 +27,7 @@ public class MeetingRoomServiceImpl extends ServiceImpl<MeetingRoomMapper, Meeti
             if (existing != null && existing.getRoomStatus() != 1) {
                 LambdaQueryWrapper<Reservation> wrapper = new LambdaQueryWrapper<>();
                 wrapper.eq(Reservation::getRoomId, room.getId())
-                       .in(Reservation::getReservationStatus, 0, 1);
+                       .in(Reservation::getReservationStatus, ReservationStatus.activeCodes());
                 long activeCount = reservationMapper.selectCount(wrapper);
                 if (activeCount > 0) {
                     return "has_active:" + activeCount;
@@ -43,7 +44,7 @@ public class MeetingRoomServiceImpl extends ServiceImpl<MeetingRoomMapper, Meeti
     public String deleteRoom(Long roomId) {
         LambdaQueryWrapper<Reservation> wrapper = new LambdaQueryWrapper<>();
         wrapper.eq(Reservation::getRoomId, roomId)
-               .in(Reservation::getReservationStatus, 0, 1);
+               .in(Reservation::getReservationStatus, ReservationStatus.activeCodes());
         long activeCount = reservationMapper.selectCount(wrapper);
         if (activeCount > 0) {
             return "has_active:" + activeCount;

@@ -56,7 +56,7 @@ class ReservationFeedbackTest {
 
     @Test
     void rejectChangedStatusIsNotReportedAsSuccess() throws Exception {
-        doThrow(new IllegalStateException("状态已变化")).when(service).reject(1L, "原因");
+        doThrow(new IllegalStateException("状态已变化")).when(service).reject(any(), any(), any());
         mvc.perform(post("/reservation/reject").param("id", "1").param("reason", "原因"))
                 .andExpect(redirectedUrl("/reservation/approve-list"))
                 .andExpect(flash().attribute("info", "状态已变化"))
@@ -65,7 +65,9 @@ class ReservationFeedbackTest {
 
     @Test
     void expiredApprovalDoesNotDisplayResultAsCode() throws Exception {
-        when(service.approve(1L)).thenReturn("expired");
+        when(service.approve(any(), any()))
+                .thenReturn(com.wyc.demo03.service.ReservationService.ApproveResult
+                        .fail("expired", "预约开始时间已过，无法批准"));
         mvc.perform(post("/reservation/approve").param("id", "1"))
                 .andExpect(flash().attribute("info", "预约开始时间已过，无法批准"))
                 .andExpect(flash().attribute("infoType", "danger"));
@@ -82,7 +84,9 @@ class ReservationFeedbackTest {
 
     @Test
     void conflictIsAnErrorNotASuccessMessage() throws Exception {
-        when(service.apply(any(), any())).thenReturn("conflict");
+        when(service.submit(any(), any(), any()))
+                .thenReturn(com.wyc.demo03.service.ReservationService.SubmitResult
+                        .fail("B04_OCCUPIED", "所选时段已被占用，请选择其他时间"));
         mvc.perform(post("/reservation/apply").param("roomId", "1")
                         .param("startTime", "2099-06-09T10:00:00").param("endTime", "2099-06-09T11:00:00")
                         .param("attendeeCount", "2"))

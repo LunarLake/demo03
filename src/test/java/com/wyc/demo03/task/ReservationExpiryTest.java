@@ -1,52 +1,78 @@
 package com.wyc.demo03.task;
 
-import com.wyc.demo03.mapper.ReservationMapper;
+import com.wyc.demo03.entity.Reservation;
 import com.wyc.demo03.service.ReservationService;
-import org.apache.ibatis.annotations.Select;
-import org.apache.ibatis.annotations.Update;
+import com.wyc.demo03.support.MutableClock;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
-import org.mockito.ArgumentCaptor;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.InOrder;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.time.LocalDateTime;
 import java.util.List;
 
-import static org.junit.jupiter.api.Assertions.*;
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Mockito.*;
+import static org.mockito.Mockito.inOrder;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
+/**
+ * 定时任务的编排测试。
+ *
+ * <p>v1 这个类断言的是 Mapper 里的 SQL 字符串（用反射取注解值），一旦 SQL 改写就红一片，
+ * 而且并不能证明"顺序对、异常不炸调度"。v2 改为验证编排行为：
+ * 四步按固定顺序调用、单轮异常被吞掉、时间来自注入的时钟。
+ */
+@ExtendWith(MockitoExtension.class)
 class ReservationExpiryTest {
-    @Test
-    void everySweepReleasesPendingEvenWithoutUncheckedApprovedReservations() {
-        ReservationMapper mapper = mock(ReservationMapper.class);
-        ReservationService service = mock(ReservationService.class);
-        when(mapper.findExpiredUnchecked(any())).thenReturn(List.of());
-        LocalDateTime before = LocalDateTime.now();
-        new ReservationScheduler(mapper, service).releaseZombieReservations();
-        LocalDateTime after = LocalDateTime.now();
-        ArgumentCaptor<LocalDateTime> now = ArgumentCaptor.forClass(LocalDateTime.class);
-        ArgumentCaptor<LocalDateTime> cutoff = ArgumentCaptor.forClass(LocalDateTime.class);
-        verify(mapper).releaseExpiredPending(now.capture());
-        verify(mapper).findExpiredUnchecked(cutoff.capture());
-        assertFalse(now.getValue().isBefore(before));
-        assertFalse(now.getValue().isAfter(after));
-        assertEquals(now.getValue().minusMinutes(15), cutoff.getValue());
-        verifyNoInteractions(service);
+
+    private static final LocalDateTime T0 = LocalDateTime.of(2026, 10, 20, 14, 0);
+
+    @Mock
+    private ReservationService reservationService;
+
+    private final MutableClock clock = MutableClock.at(T0);
+    private ReservationScheduler scheduler;
+
+    @BeforeEach
+    void setUp() {
+        scheduler = new ReservationScheduler(reservationService, clock);
     }
 
     @Test
-    void pendingReleaseSqlIsConditionalAndRetainsHistory() throws Exception {
-        String sql = String.join(" ", ReservationMapper.class
-                .getMethod("releaseExpiredPending", LocalDateTime.class).getAnnotation(Update.class).value());
-        assertEquals("UPDATE t_reservation SET reservation_status = 5 WHERE reservation_status = 0 AND start_time < #{now}", sql);
+    @DisplayName("一轮收敛按「释放待审批 → 释放爽约 → 到期结束 → 结束提醒」顺序执行")
+    void convergeRunsStepsInOrder() {
+        scheduler.converge();
+
+        InOrder order = inOrder(reservationService);
+        order.verify(reservationService).releasePendingStarted(T0);
+        order.verify(reservationService).releaseNoShow(T0);
+        order.verify(reservationService).finishExpired(T0);
+        order.verify(reservationService).remindEnding(T0);
     }
 
     @Test
-    void scheduleIncludesBothOccupyingStatusesAndCrossDayIntervals() throws Exception {
-        String sql = String.join(" ", ReservationMapper.class
-                .getMethod("findByRoomAndDate", Long.class, String.class).getAnnotation(Select.class).value());
-        assertTrue(sql.contains("r.reservation_status IN (0, 1)"));
-        assertTrue(sql.contains("r.start_time < DATE_ADD(#{date}, INTERVAL 1 DAY)"));
-        assertTrue(sql.contains("r.end_time > #{date}"));
-        assertTrue(sql.contains("r.reservation_status,"));
+    @DisplayName("单轮抛异常不能终止调度：异常被吞掉，调度线程存活")
+    void exceptionDoesNotKillScheduler() {
+        when(reservationService.releasePendingStarted(any()))
+                .thenThrow(new IllegalStateException("数据库抖了一下"));
+
+        assertDoesNotThrow(() -> scheduler.converge());
+        verify(reservationService).releasePendingStarted(T0);
+    }
+
+    @Test
+    @DisplayName("提醒结果用于日志统计，不抛异常")
+    void reminderResultIsTolerated() {
+        Reservation r = new Reservation();
+        r.setId(1L);
+        when(reservationService.remindEnding(T0)).thenReturn(List.of(r));
+
+        assertDoesNotThrow(() -> scheduler.converge());
+        verify(reservationService).remindEnding(T0);
     }
 }

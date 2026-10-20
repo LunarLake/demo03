@@ -7,6 +7,7 @@ import com.wyc.demo03.service.MeetingRoomService;
 import com.wyc.demo03.service.ReservationService;
 import com.wyc.demo03.service.UserService;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
@@ -16,10 +17,12 @@ import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 import org.springframework.web.servlet.view.InternalResourceViewResolver;
 
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.flash;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.model;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.redirectedUrl;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -217,13 +220,15 @@ class ControllerLayerTest {
     }
 
     @Test
-    void applyWithConflictShowsFlashMessage() throws Exception {
+    @DisplayName("申请被规则拒绝时回到房间列表并带出规则给出的原因")
+    void applyRejectedShowsRuleMessage() throws Exception {
         // Arrange
         MockHttpSession session = new MockHttpSession();
         session.setAttribute("Id", 1L);
         session.setAttribute("role", "STUDENT");
-        when(reservationService.apply(org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any()))
-                .thenReturn("conflict");
+        when(reservationService.submit(any(), any(), any()))
+                .thenReturn(com.wyc.demo03.service.ReservationService.SubmitResult
+                        .fail("B04_OCCUPIED", "所选时段已被占用，请选择其他时间"));
 
         // Act & Assert
         mockMvc.perform(post("/reservation/apply")
@@ -234,7 +239,30 @@ class ControllerLayerTest {
                         .param("attendeeCount", "5")
                         .param("_csrf", "token"))
                 .andExpect(status().is3xxRedirection())
-                .andExpect(redirectedUrl("/rooms"));
+                .andExpect(redirectedUrl("/rooms"))
+                .andExpect(flash().attribute("info", "所选时段已被占用，请选择其他时间"));
+    }
+
+    @Test
+    @DisplayName("自动通过后跳到「我的预约」并带出签到码")
+    void applyAutoApprovedRedirectsToMyReservations() throws Exception {
+        MockHttpSession session = new MockHttpSession();
+        session.setAttribute("Id", 1L);
+        session.setAttribute("role", "STUDENT");
+        when(reservationService.submit(any(), any(), any()))
+                .thenReturn(com.wyc.demo03.service.ReservationService.SubmitResult.ok(
+                        9L, com.wyc.demo03.domain.ReservationStatus.APPROVED, "自动通过", "1234"));
+
+        mockMvc.perform(post("/reservation/apply")
+                        .session(session)
+                        .param("roomId", "1")
+                        .param("startTime", "2026-08-13T10:00:00")
+                        .param("endTime", "2026-08-13T11:00:00")
+                        .param("attendeeCount", "5")
+                        .param("_csrf", "token"))
+                .andExpect(status().is3xxRedirection())
+                .andExpect(redirectedUrl("/my-reservations"))
+                .andExpect(flash().attribute("infoType", "success"));
     }
 
     @Test
@@ -314,7 +342,8 @@ class ControllerLayerTest {
     @Test
     void approveSuccessRedirectsWithCode() throws Exception {
         // Arrange
-        when(reservationService.approve(1L)).thenReturn("1234");
+        when(reservationService.approve(org.mockito.ArgumentMatchers.eq(1L), any()))
+                .thenReturn(com.wyc.demo03.service.ReservationService.ApproveResult.ok("1234"));
 
         // Act & Assert
         mockMvc.perform(post("/reservation/approve").param("id", "1"))
@@ -325,7 +354,9 @@ class ControllerLayerTest {
     @Test
     void approveFailureRedirectsWithError() throws Exception {
         // Arrange
-        when(reservationService.approve(1L)).thenReturn("error");
+        when(reservationService.approve(org.mockito.ArgumentMatchers.eq(1L), any()))
+                .thenReturn(com.wyc.demo03.service.ReservationService.ApproveResult
+                        .fail("state_changed", "该申请已被处理，请刷新后重试"));
 
         // Act & Assert
         mockMvc.perform(post("/reservation/approve").param("id", "1"))
@@ -384,13 +415,22 @@ class ControllerLayerTest {
     @Test
     void roomScheduleReturnsJson() throws Exception {
         // Arrange
-        when(reservationService.findScheduleByRoomAndDate(1L, "2026-08-13"))
+        when(reservationService.findScheduleByRoomAndDate(1L, java.time.LocalDate.of(2026, 8, 13)))
                 .thenReturn(java.util.List.of());
 
         // Act & Assert
         mockMvc.perform(get("/api/room-schedule")
                         .param("roomId", "1")
                         .param("date", "2026-08-13"))
+                .andExpect(status().isOk());
+    }
+
+    @Test
+    @DisplayName("非法日期不抛 400，返回空列表")
+    void roomScheduleToleratesBadDate() throws Exception {
+        mockMvc.perform(get("/api/room-schedule")
+                        .param("roomId", "1")
+                        .param("date", "2026-13-99"))
                 .andExpect(status().isOk());
     }
 

@@ -42,3 +42,29 @@
 2. `ReservationServiceImplTest` 的 32 条用例中，约 20 条断言的是旧窗口（`start-10min ~ start+15min`）与旧占位规则（`IN (0,1)`），这些属于**语义已变**，重写时要写清新的边界值，不要简单改数字。
 3. `ControllerLayerTest` 建议按"预约 / 审批 / 签到 / 上诉 / 设备"五组拆分，单个类 27 条已经太大。
 4. 任何一条用例若在 P2 中删除，必须在 commit message 里写明"为什么这个行为不再存在"，便于答辩时解释。
+
+---
+
+## P2 实际结果（已完成）
+
+| 测试类 | 处置 | 结果 |
+|---|---|---|
+| `service.impl.ReservationServiceImplTest` | 整体重写 | 32 条 → **50 条**（按 @Nested 分「提交申请 / 教师覆盖 / 人工审批 / 取消 / 签到 / 状态收敛」六组），用真实 `RuleEngine`，只 mock 数据层 |
+| `task.ReservationExpiryTest` | 重写 | 3 条 → **3 条**。v1 用反射断言 Mapper 的 SQL 字符串，改为验证调度编排（四步顺序、异常不炸调度） |
+| `controller.ControllerLayerTest` | 局部重写 | 27 → **29 条**，`apply/approve` 改到新签名，新增"非法日期不抛 400" |
+| `controller.ReservationFeedbackTest` | 局部重写 | 7 条全部保留语义，改到新签名 |
+| `controller.AdminOpsTest` | 删除 2 条 | 调度器用例重复覆盖，已收口到 `ReservationExpiryTest` |
+| `integration.ReservationFlowIntegrationTest` | **新增** | 9 条真库 IT：唯一键仲裁、并发批准冲突、教师覆盖、签到一次性、分页 SQL |
+| `domain.*` + `support.MutableClock` | 新增 | 状态机 8 + 时段 16 |
+
+**哪些 v1 断言被"取消"了，以及为什么**
+
+| v1 断言 | 为什么不再存在 |
+|---|---|
+| `apply` 返回 `conflict`（学生撞任意时段的已批准预约） | 语义已变：待审批不占单元，学生只在"撞上已通过/已签到的单元"时被 `B04_OCCUPIED` 拒绝 |
+| `apply` 返回 `invalid_time` | 由 `SlotSchema` 统一返回 `invalid_range` / `not_aligned` / `cross_day` 等更精确的码 |
+| 签到窗口 `start-10min ~ start+15min` | 文档 3.2.3 改为 `[开始, 开始+5min)` |
+| `attend_status` 在审批时预建记录 | v2 不预建：没有记录即未签到，签到成功才写入（唯一键保证一次） |
+| `AdminInterceptor` 路径断言 | 待 P3 换 `PermissionInterceptor` 时一并处理 |
+
+**总计**：`mvn test` **182 tests, 0 failures**（P1 交付时 155）。
