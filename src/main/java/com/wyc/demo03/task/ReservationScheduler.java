@@ -22,7 +22,10 @@ public class ReservationScheduler {
 
     @Scheduled(fixedDelay = 60_000)
     public void releaseZombieReservations() {
-        LocalDateTime cutoff = LocalDateTime.now().minusMinutes(15);
+        LocalDateTime now = LocalDateTime.now();
+        // 待审批申请过了开始时间即失效；条件更新不会覆盖已经处理的申请。
+        reservationMapper.releaseExpiredPending(now);
+        LocalDateTime cutoff = now.minusMinutes(15);
         List<Reservation> zombies = reservationMapper.findExpiredUnchecked(cutoff);
         for (Reservation r : zombies) {
             reservationService.lambdaUpdate()

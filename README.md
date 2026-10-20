@@ -146,7 +146,7 @@
 1. **准备数据库**：创建 `db02` 数据库，并按 3.3 节的表设计建立 5 张表
 2. **配置连接**：复制 `src/main/resources/application-local.yml.example` 为 `application-local.yml`，填写数据库密码（或用环境变量 `DB_USERNAME` / `DB_PASSWORD`，可选的 `DB_HOST` / `DB_PORT` / `DB_NAME`）
 3. **初始化账号**：执行 `mysql -u root -p db02 < sql/init-admin.sql`，创建管理员（`admin` / `admin123`）与教师（`teacher` / `teacher123`）账号；普通学生直接通过注册页注册
-4. **启动项目**：`.\mvnw spring-boot:run`，访问 http://localhost:8080
+4. **启动项目**：`.\mvnw spring-boot:run`，访问 <http://localhost:8080>
 5. **运行测试**：`.\mvnw test`（107 个测试，JaCoCo 报告在 `target/site/jacoco/index.html`）
 
 > 密码安全提示：`sql/init-admin.sql` 中的默认密码仅用于本地开发，部署前请更换随机强密码（哈希生成方法见脚本注释）。数据库连接信息勿提交仓库。

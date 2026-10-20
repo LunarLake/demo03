@@ -14,7 +14,8 @@
       <section class="container-fluid py-4 px-3 px-md-4">
         <div
           th:if="${info != null}"
-          class="alert alert-success alert-dismissible fade show"
+          class="alert alert-dismissible fade show"
+          th:classappend="${infoType == 'success' ? 'alert-success' : (infoType == 'danger' ? 'alert-danger' : 'alert-info')}"
           role="alert"
         >
           <span th:text="${info}"></span>

@@ -23,25 +23,20 @@ import org.springframework.web.servlet.mvc.support.RedirectAttributes;
 
 /**
  * 预约控制器 —— 处理预约申请、审批、签到、取消、日程数据 API
- *
  * 本控制器包含系统最核心的业务接口，按功能可分为四组：
- *
  *   【预约组】
  *     GET  /reservation/new              — 可视化预约大屏（甘特图）
  *     POST /reservation/apply            — 提交预约申请（学生→待审批 / 教师→自动通过）
  *     GET  /api/room-schedule            — 返回 JSON 日程数据（供甘特图 AJAX 请求）
  *     GET  /my-reservations              — 我的预约列表
- *
  *   【审批组】（管理员专属）
  *     GET  /reservation/approve-list     — 审批管理列表
  *     POST /reservation/approve          — 批准预约（生成签到码）
  *     POST /reservation/reject           — 拒绝预约
  *     GET  /reservation/detail/{id}      — 预约详情
- *
  *   【签到组】
  *     GET  /reservation/check-in/{id}    — 签到页面
  *     POST /reservation/check-in-action  — 执行签到核销
- *
  *   【取消组】
  *     POST /reservation/cancel/{id}      — 取消预约
  */
@@ -86,6 +81,7 @@ public class ReservationController {
         // ★ BindingResult 拦截：前端表单校验失败 → 拒绝
         if (bindingResult.hasErrors()) {
             ra.addFlashAttribute("info", "请填写完整的预约信息！");
+            ra.addFlashAttribute("infoType", "danger");
             return "redirect:/rooms";
         }
 
@@ -94,12 +90,17 @@ public class ReservationController {
         String result = reservationService.apply(reservation, session);
 
         // 根据 Service 返回的结果码设置对应的用户提示
+        ra.addFlashAttribute("infoType", "success".equals(result) ? "success" : "danger");
         switch (result) {
             case "conflict"       -> ra.addFlashAttribute("info", "该时段已被预约，请选择其他时间！");
             case "over_capacity"  -> ra.addFlashAttribute("info", "参会人数超过会议室容量，无法预约！");
             case "room_not_found" -> ra.addFlashAttribute("info", "会议室不存在！");
             case "past_time"      -> ra.addFlashAttribute("info", "不能预约过去的时间！");
-            default               -> ra.addFlashAttribute("info", "预约申请提交成功！");
+            case "room_maintenance" -> ra.addFlashAttribute("info", "该会议室正在维护中，暂无法预约！");
+            case "invalid_time"   -> ra.addFlashAttribute("info", "结束时间必须晚于开始时间！");
+            case "success"        -> ra.addFlashAttribute("info", "TEACHER".equals(session.getAttribute("role"))
+                    ? "预约已生效，请在会议开始前10分钟至开始后15分钟内签到" : "预约申请提交成功，等待管理员审批");
+            default               -> ra.addFlashAttribute("info", "预约提交失败，请稍后重试");
         }
         return "redirect:/rooms";
     }
@@ -148,11 +149,13 @@ public class ReservationController {
     @PostMapping("/reservation/approve")
     public String approve(Long id, RedirectAttributes ra) {
         String code = reservationService.approve(id);
-        if ("error".equals(code)) {
-            ra.addFlashAttribute("info", "审批失败！");
+        if ("error".equals(code) || "expired".equals(code)) {
+            ra.addFlashAttribute("info", "expired".equals(code)
+                    ? "预约开始时间已过，无法批准" : "申请不存在或状态已变化，本次未执行批准");
+            ra.addFlashAttribute("infoType", "danger");
         } else {
-            // 签到码展示给管理员，管理员需要告知学生（或投屏展示）
-            ra.addFlashAttribute("info", "审批通过，签到码：" + code);
+            ra.addFlashAttribute("info", "审批通过，申请人可在我的预约中查看签到码：" + code);
+            ra.addFlashAttribute("infoType", "success");
         }
         return "redirect:/reservation/approve-list";
     }
@@ -161,11 +164,20 @@ public class ReservationController {
     // POST /reservation/reject —— 拒绝预约（管理员专属）
     // ====================================================================
     // Service 层有防御：只有 status=0 的预约才能被拒绝，
-    // 已通过/已拒绝/被覆盖/已取消的预约即使点了拒绝也会被静默忽略。
+    // 已处理的申请不再拒绝，明确提示状态已变化。
     @PostMapping("/reservation/reject")
     public String reject(Long id, String reason, RedirectAttributes ra) {
-        reservationService.reject(id, reason);
-        ra.addFlashAttribute("info", "已拒绝该预约申请");
+        try {
+            if (reason != null && reason.length() > 200) {
+                throw new IllegalArgumentException("拒绝原因不能超过200字");
+            }
+            reservationService.reject(id, reason);
+            ra.addFlashAttribute("info", "已拒绝该预约申请");
+            ra.addFlashAttribute("infoType", "success");
+        } catch (IllegalArgumentException | IllegalStateException ex) {
+            ra.addFlashAttribute("info", ex.getMessage());
+            ra.addFlashAttribute("infoType", "danger");
+        }
         return "redirect:/reservation/approve-list";
     }
 
@@ -191,11 +203,13 @@ public class ReservationController {
         MeetingRoom room = meetingRoomService.getById(roomId);
         if (room == null) {
             ra.addFlashAttribute("info", "会议室不存在！");
+            ra.addFlashAttribute("infoType", "danger");
             return "redirect:/rooms";
         }
         // 维护状态检查：如果会议室标记为"维护中"，禁止进入预约页
         if (room.getRoomStatus() == 1) {
             ra.addFlashAttribute("info", "该会议室正在维护中，暂无法预约！");
+            ra.addFlashAttribute("infoType", "danger");
             return "redirect:/rooms";
         }
         model.addAttribute("roomId", roomId);
@@ -220,7 +234,7 @@ public class ReservationController {
     //       "userName": "李老师", "role": "TEACHER" }
     //   ]
     //
-    // 注意：只返回 status=1（已批准）的预约。待审批(status=0)的预约不在甘特图上显示。
+    // 返回 status=0/1（待审批/已批准）及状态，与后端冲突检查的占位规则一致。
     @ResponseBody
     @GetMapping("/api/room-schedule")
     public ApiResponse<List<Map<String, Object>>> roomSchedule(@RequestParam Long roomId, @RequestParam String date) {
@@ -264,6 +278,7 @@ public class ReservationController {
         String result = reservationService.cancel(id, userId);
 
         // 根据结果码给出对应的中文提示
+        ra.addFlashAttribute("infoType", "success".equals(result) ? "success" : "danger");
         switch (result) {
             case "success"            -> ra.addFlashAttribute("info", "预约已取消");
             case "not_owner"          -> ra.addFlashAttribute("info", "无权取消该预约");
@@ -327,6 +342,11 @@ public class ReservationController {
         // 调用 Service 的五步校验链路：
         //   预约有效性 → 时间窗口 → 签到码比对 → 签到记录校验 → 防重复
         String result = reservationService.checkIn(reservationId, userId, code, ip);
+        model.addAttribute("reservationId", reservationId);
+        boolean completed = "success".equals(result) || "already_checked_in".equals(result);
+        model.addAttribute("checkInFinished", completed || "expired".equals(result)
+                || "too_many_attempts".equals(result) || "error".equals(result));
+        model.addAttribute("infoType", completed ? "success" : "danger");
 
         // 根据结果码返回对应的中文提示，失败时不重定向（用户在同一页面看到提示后可以重试）
         switch (result) {

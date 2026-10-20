@@ -4,8 +4,8 @@
 //  技术栈：ECharts 自定义系列 + Axios 数据请求
 //  核心职责：
 //    1. 初始化 ECharts 横向时间轴甘特图
-//    2. 从后端 /api/room-schedule 拉取本日本房间的已批准预约
-//    3. 按角色区分颜色（教师红 #dc3545 / 学生橙 #fd7e14）
+//    2. 拉取本日相交的待审批及已批准预约，与后端占用状态一致
+//    3. 明确显示教师、学生、管理员角色，以及待审批状态
 //    4. 支持点击时间轴"两次点选"确定预约起止时间
 //    5. 前端实时冲突检测 + 按钮联动变色
 //    6. 教师可在学生橙色区间上强行点选（覆盖入口）
@@ -24,6 +24,25 @@ var clickCount = 0; // 点击计数器：0=还没选 / 1=已选起点等待终�
 var firstClickTime = null; // 第一次点击的时间（Date 对象），即用户选的"起点"
 var selectedStart = null; // 最终确认的起点（第二次点击后才赋值）
 var selectedEnd = null; // 最终确认的终点（第二次点击后才赋值）
+var scheduleReady = false;
+var scheduleRequest = 0;
+
+function showSelectionMessage(message) {
+  document.getElementById("selectionMessage").textContent = message;
+}
+
+function reservationColor(item) {
+  if (Number(item.reservation_status) === 0) return "#997404";
+  if (item.role === "TEACHER") return "#dc3545";
+  if (item.role === "STUDENT") return "#fd7e14";
+  if (item.role === "ADMIN") return "#6f42c1";
+  return "#6c757d";
+}
+
+function reservationLabel(item) {
+  var role = { TEACHER: "教师", STUDENT: "学生", ADMIN: "管理员" }[item.role] || "其他";
+  return role + (Number(item.reservation_status) === 0 ? "·待审批占用" : "·已预约");
+}
 
 // -------------------------------------------------------
 // 工具函数
@@ -177,14 +196,14 @@ function refreshChart() {
     var item = scheduleData[j];
     // ★ 角色分色逻辑：教师预约用红色(#dc3545)，学生预约用橙色(#fd7e14)
     //   这是实现"一眼区分教师/学生时段"的关键代码
-    var color = item["role"] === "TEACHER" ? "#dc3545" : "#fd7e14";
+    var color = reservationColor(item);
     data.push({
       value: [
         1,
         new Date(item["start_time"]).getTime(),
         new Date(item["end_time"]).getTime(),
         color,
-        item["userName"], // 显示在矩形条上的预约人姓名
+        reservationLabel(item), // 角色与占用状态，不只靠颜色区分
       ],
     });
   }
@@ -193,7 +212,7 @@ function refreshChart() {
   if (selectedStart && selectedEnd) {
     // 用户已完成两次点击（确定了起止时间）：画绿色选中条
     data.push({
-      value: [1, selectedStart.getTime(), selectedEnd.getTime(), "#198754", ""],
+      value: [1, selectedStart.getTime(), selectedEnd.getTime(), "rgba(13,110,253,0.3)", ""],
     });
   } else if (firstClickTime) {
     // 用户只点了第一次（起点）：画一个 15 分钟的黄色提示条
@@ -282,7 +301,7 @@ function hasTeacherOverlap(start, end) {
 }
 
 // ============================================================
-// ★ 核心函数四：hasStudentOverlap —— 检测是否与学生预约冲突
+// ★ 核心函数四：hasNonTeacherOverlap —— 检测是否与学生预约冲突
 // ============================================================
 // 逻辑和 hasTeacherOverlap 完全一致，只是过滤条件换成 role==='STUDENT'。
 //
@@ -290,10 +309,10 @@ function hasTeacherOverlap(start, end) {
 //   - 学生用户选了学生时段 → 不允许，按钮变红禁用（学生之间不能互相覆盖）
 //   - 教师用户选了学生时段 → 这是"覆盖场景"，不在这个函数里拦截，
 //     而是在 getZr().on('click') 里配合 currentUserRole 判断
-function hasStudentOverlap(start, end) {
+function hasNonTeacherOverlap(start, end) {
   for (var j = 0; j < scheduleData.length; j++) {
     var item = scheduleData[j];
-    if (item["role"] !== "STUDENT") continue; // 跳过非学生预约
+    if (item["role"] === "TEACHER") continue; // 与后端一致：包括学生和管理员预约
     var s = new Date(item["start_time"]),
       e = new Date(item["end_time"]);
     if (start < e && end > s) return true; // 有重叠 → 冲突
@@ -316,48 +335,48 @@ function hasStudentOverlap(start, end) {
 //   5. 拿到数据后更新 scheduleData 并刷新图表
 function loadSchedule() {
   var roomId = document.querySelector('input[name="roomId"]').value;
-
-  // ---- 重置所有选择状态 ----
+  var requestId = ++scheduleRequest;
+  scheduleReady = false;
+  scheduleData = [];
   clickCount = 0;
-  firstClickTime = null;
-  selectedStart = null;
-  selectedEnd = null;
-
-  // ---- 重置提交按钮为初始状态（禁用 + 绿色样式） ----
+  firstClickTime = selectedStart = selectedEnd = null;
   var btn = document.getElementById("submitBtn");
   btn.disabled = true;
   btn.className = "btn btn-success w-100";
   btn.textContent = "提交预约";
-
-  // ---- 清空时间显示框 ----
-  document.getElementById("displayStart").value = "";
-  document.getElementById("displayEnd").value = "";
-
-  // ---- AJAX 请求日程数据 ----
-  // GET /api/room-schedule?roomId=X&date=2026-06-09
-  // 返回统一信封 { success, data, message }，data 为
-  // [{start_time, end_time, userName, role}, ...]
-  axios
-    .get("/api/room-schedule?roomId=" + roomId + "&date=" + getDate())
+  ["displayStart", "displayEnd", "applyStartTime", "applyEndTime"].forEach(function (id) {
+    document.getElementById(id).value = "";
+  });
+  chart.clear();
+  document.getElementById("scheduleError").classList.add("d-none");
+  if (!getDate()) {
+    chart.hideLoading();
+    showSelectionMessage("请先选择日期");
+    return Promise.resolve();
+  }
+  chart.showLoading({ text: "正在加载排期…" });
+  showSelectionMessage("排期加载中，暂不可选择或提交");
+  return axios.get("/api/room-schedule?roomId=" + roomId + "&date=" + getDate())
     .then(function (res) {
+      if (requestId !== scheduleRequest) return;
       var body = res.data;
-      if (!body.success) {
-        // 业务失败（服务器返回错误信封）→ 显示提示
-        var errBox = document.getElementById("scheduleError");
-        if (errBox) errBox.classList.remove("d-none");
-        return;
+      if (!body || !body.success || !Array.isArray(body.data)) {
+        throw new Error("排期数据无效");
       }
-      scheduleData = body.data; // 更新全局 scheduleData
-      refreshChart(); // 重新渲染甘特图
-      // 加载成功 → 隐藏错误提示
-      var errBox = document.getElementById("scheduleError");
-      if (errBox) errBox.classList.add("d-none");
+      scheduleData = body.data;
+      scheduleReady = true;
+      chart.hideLoading();
+      refreshChart();
+      showSelectionMessage("请选择起始时间；待审批和已批准的预约均占用时段");
     })
-    .catch(function (err) {
-      console.error(err); // 网络异常等情况下打印错误
-      // 页面显示友好提示，避免用户面对空白图表不知所措
-      var errBox = document.getElementById("scheduleError");
-      if (errBox) errBox.classList.remove("d-none");
+    .catch(function () {
+      if (requestId !== scheduleRequest) return;
+      scheduleReady = false;
+      chart.hideLoading();
+      chart.clear();
+      document.getElementById("submitBtn").disabled = true;
+      document.getElementById("scheduleError").classList.remove("d-none");
+      showSelectionMessage("当前可用情况未知，请重试加载");
     });
 }
 
@@ -376,6 +395,7 @@ function loadSchedule() {
 //   【第二步】占用检查（判断点击位置是否在已有预约内）
 //   【第三步】两次点击的状态机（选起点 → 选终点 → 冲突检测 → 按钮变色）
 chart.getZr().on("click", function (e) {
+  if (!scheduleReady) return;
   // ==================== 【第一步】像素坐标 → 时间戳转换 ====================
   // e.offsetX, e.offsetY 是鼠标在画布上的像素坐标
   var pt = [e.offsetX, e.offsetY];
@@ -404,23 +424,19 @@ chart.getZr().on("click", function (e) {
   // 判断条件：d >= s（起点） AND d < e（终点，开区间）
   //   用开区间的原因是：如果一个预约在 10:00 结束，用户在 10:00 整点击
   //   应该被允许（因为 10:00 是上一段的结束，也可以是下一段的开始）
-  for (var j = 0; j < scheduleData.length; j++) {
-    var occ = scheduleData[j];
-    var s = new Date(occ["start_time"]),
-      e = new Date(occ["end_time"]);
-    if (d >= s && d < e) {
-      // ★★★ 点击位置落入了已有预约的区间内 ★★★
-      // 此时需要进行角色判断，决定是否拦截：
-      //
-      // 条件：currentUserRole !== 'TEACHER' || occ['role'] === 'TEACHER'
-      // 翻译成人话：
-      //   - 如果当前用户不是教师 → 直接拦截（学生不能点任何已占用时段）
-      //   - 如果当前用户是教师，但这个预约也是教师的 → 拦截（教师之间不能互相覆盖）
-      //   - 如果当前用户是教师，且这个预约是学生的 → 不拦截！允许点选（这就是"强行覆盖"入口）
-      if (currentUserRole !== "TEACHER" || occ["role"] === "TEACHER") {
-        return; // 拦截：不响应这次点击
+  // 起点按点占用检查，终点交给完整区间检查：占用开始边界可作为前一段的终点。
+  if (clickCount === 0) {
+    if (d.getTime() === range[1] || d < new Date()) {
+      showSelectionMessage("开始时间不能在过去或22:00，请选择其他时间");
+      return;
+    }
+    for (var j = 0; j < scheduleData.length; j++) {
+      var occ = scheduleData[j];
+      var s = new Date(occ.start_time), end = new Date(occ.end_time);
+      if (d >= s && d < end && (currentUserRole !== "TEACHER" || occ.role === "TEACHER")) {
+        showSelectionMessage(reservationLabel(occ) + "，请选择其他时间");
+        return;
       }
-      // 走到这里说明：教师点了学生时段 → 继续往下执行（进入覆盖流程）
     }
   }
 
@@ -437,6 +453,9 @@ chart.getZr().on("click", function (e) {
     // 在页面上的"开始时间"文本框显示选中的起点
     document.getElementById("displayStart").value = toTimeStr(d);
     document.getElementById("displayEnd").value = ""; // 清空终点显示
+    document.getElementById("applyStartTime").value = "";
+    document.getElementById("applyEndTime").value = "";
+    showSelectionMessage("已选择起点，请选择结束时间");
 
     // 还没选完终点，提交按钮保持禁用
     document.getElementById("submitBtn").disabled = true;
@@ -463,6 +482,12 @@ chart.getZr().on("click", function (e) {
       b = new Date(a.getTime() + 15 * 60000);
     }
 
+    if (a < new Date() || a.getTime() < range[0] || b.getTime() > range[1]) {
+      showSelectionMessage("所选时间已过去或超出08:00–22:00，请重新选择结束时间");
+      document.getElementById("submitBtn").disabled = true;
+      return;
+    }
+
     // 保存最终选择的起止时间
     selectedStart = a;
     selectedEnd = b;
@@ -483,8 +508,8 @@ chart.getZr().on("click", function (e) {
     //   3. hasOverride        — 教师选了学生时段（允许覆盖，按钮变橙色）
     var hasTeacherConflict = hasTeacherOverlap(a, b);
     var hasStudentConflict =
-      currentUserRole !== "TEACHER" && hasStudentOverlap(a, b);
-    var hasOverride = currentUserRole === "TEACHER" && hasStudentOverlap(a, b);
+      currentUserRole !== "TEACHER" && hasNonTeacherOverlap(a, b);
+    var hasOverride = currentUserRole === "TEACHER" && hasNonTeacherOverlap(a, b);
 
     var btn = document.getElementById("submitBtn");
 
@@ -496,7 +521,7 @@ chart.getZr().on("click", function (e) {
       btn.className = "btn btn-outline-danger w-100"; // 红色边框样式
       btn.textContent = hasTeacherConflict
         ? "所选时段与教师预约冲突"
-        : "所选时段与学生预约冲突";
+        : "所选时段与其他预约冲突";
     } else {
       // ---- 无致命冲突：启用提交按钮 ----
       btn.disabled = false;
@@ -511,6 +536,9 @@ chart.getZr().on("click", function (e) {
         btn.textContent = "提交预约";
       }
     }
+
+    showSelectionMessage(btn.disabled ? btn.textContent : (hasOverride
+      ? "提交将覆盖重叠的非教师预约，请确认后操作" : "时间已选好，请填写人数并提交"));
 
     // 重置状态机：为下一次选择做准备
     clickCount = 0;
@@ -536,7 +564,16 @@ document.getElementById("datePicker").value =
   pad(today.getDate());
 
 // 2. 监听日期切换事件：用户换日期就重新加载日程
+document.getElementById("datePicker").min = document.getElementById("datePicker").value;
 document.getElementById("datePicker").addEventListener("change", loadSchedule);
+document.getElementById("retrySchedule").addEventListener("click", loadSchedule);
+document.querySelector('form[action="/reservation/apply"]').addEventListener("submit", function (event) {
+  if (!scheduleReady || document.getElementById("submitBtn").disabled || !selectedStart || !selectedEnd
+      || selectedStart < new Date()) {
+    event.preventDefault();
+    showSelectionMessage("请先加载排期并选择有效的起止时间");
+  }
+});
 
 // 3. 窗口大小变化时，自动调整 ECharts 图表大小（响应式适配）
 window.onresize = function () {

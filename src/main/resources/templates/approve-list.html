@@ -14,7 +14,8 @@
       <section class="container-fluid py-4 px-3 px-md-4">
         <div
           th:if="${info != null}"
-          class="alert alert-info alert-dismissible fade show"
+          class="alert alert-dismissible fade show"
+          th:classappend="${infoType == 'success' ? 'alert-success' : (infoType == 'danger' ? 'alert-danger' : 'alert-info')}"
           role="alert"
         >
           <span th:text="${info}"></span>
@@ -128,7 +129,7 @@
                 <strong id="approveRoom"></strong> 的预约申请？
               </p>
               <p class="text-muted small mb-0">
-                批准后将生成 4 位签到码，请告知申请人用于现场签到。
+                批准后生成4位签到码，申请人可在“我的预约”查看；会议开始后15分钟内未签到将释放预约。
               </p>
             </div>
             <div class="modal-footer">
@@ -174,9 +175,12 @@
                   class="form-control"
                   id="rejectReason"
                   name="reason"
+                  maxlength="200"
+                  aria-describedby="rejectReasonHint"
                   rows="3"
                   placeholder="如：该时段已有教学安排"
                 ></textarea>
+                <div id="rejectReasonHint" class="form-text">最多200字，空白时使用默认原因。</div>
               </div>
             </div>
             <div class="modal-footer">

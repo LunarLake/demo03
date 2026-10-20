@@ -30,7 +30,7 @@ public class Reservation {
     private Integer reservationStatus;
     //拒绝原因（管理员拒绝时填写，展示在申请人的"我的预约"中）
     private String rejectReason;
-    //教师批准后系统生成的4位随机签到码
+    //管理员批准或教师预约自动通过后生成的4位随机签到码
     private String checkInCode;
     //参会人数
     @Positive

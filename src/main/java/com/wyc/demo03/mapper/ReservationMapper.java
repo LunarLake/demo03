@@ -48,7 +48,11 @@ public interface ReservationMapper extends BaseMapper<Reservation> {
     // 查找所有已过期但未签到的预约列表，返回列表包含预约信息、预约用户名称和会议室名称，按预约开始时间升序排序
     @Select("SELECT r.* FROM t_reservation r LEFT JOIN t_attendance_record ar ON r.id = ar.reservation_id WHERE r.reservation_status = 1 AND r.start_time < #{cutoffTime} AND (ar.id IS NULL OR ar.attend_status = 0)")
     List<Reservation> findExpiredUnchecked(@Param("cutoffTime") LocalDateTime cutoffTime);
-    // 查找指定会议室在指定日期的预约列表，返回列表包含预约开始时间、结束时间、预约用户名称和角色等信息，按预约开始时间升序排序
-    @Select("SELECT r.start_time, r.end_time, u.name AS userName, u.role AS role FROM t_reservation r JOIN t_user u ON r.user_id = u.id WHERE r.room_id = #{roomId} AND r.reservation_status = 1 AND DATE(r.start_time) = #{date} ORDER BY r.start_time")
+    // 已开始但仍待审批的申请失效；条件更新不会覆盖已被批准/取消的记录。
+    @org.apache.ibatis.annotations.Update("UPDATE t_reservation SET reservation_status = 5 WHERE reservation_status = 0 AND start_time < #{now}")
+    int releaseExpiredPending(@Param("now") LocalDateTime now);
+
+    // 与冲突查询保持一致：待审批和已批准均占位；按区间相交包含跨日历史记录。
+    @Select("SELECT r.start_time, r.end_time, r.reservation_status, u.name AS userName, u.role AS role FROM t_reservation r JOIN t_user u ON r.user_id = u.id WHERE r.room_id = #{roomId} AND r.reservation_status IN (0, 1) AND r.start_time < DATE_ADD(#{date}, INTERVAL 1 DAY) AND r.end_time > #{date} ORDER BY r.start_time")
     List<Map<String, Object>> findByRoomAndDate(@Param("roomId") Long roomId, @Param("date") String date);
 }

@@ -24,7 +24,6 @@ import java.io.IOException;
 
 /**
  * 主控制器 —— 处理首页、登录、注册、验证码、注销
- *
  * 路由映射关系（Controller ↔ Thymeleaf 模板）：
  *   GET  /, /index           → 返回 "home"  → templates/home.html
  *   GET  /login              → 返回 "login" → templates/login.html
@@ -105,12 +104,12 @@ public class MainController {
     // ====================================================================
     // GET /verityImg —— 生成图形验证码
     // ====================================================================
-    // 使用 Hutool 的 LineCaptcha（线段干扰验证码）生成 200×100 像素的 PNG 图片。
+    // 使用 Hu Tool 的 LineCaptcha（线段干扰验证码）生成 200×100 像素的 PNG 图片。
     //   1. 生成随机验证码文本（如 "A3B9"）
     //   2. 把文本存入 session.verityCode（供 loginAction 对比）
     //   3. 把 PNG 图片直接写入 response 输出流（浏览器 <img> 标签自动渲染）
     @GetMapping("/verityImg")
-    public void verityImg(HttpServletRequest request, HttpServletResponse response, HttpSession session) throws IOException {
+    public void verityImg(HttpServletResponse response, HttpSession session) throws IOException {
         // 创建 200×100 像素的线段干扰验证码
         LineCaptcha lineCaptcha = CaptchaUtil.createLineCaptcha(200, 100);
 

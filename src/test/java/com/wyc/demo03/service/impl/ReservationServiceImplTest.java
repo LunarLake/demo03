@@ -89,6 +89,25 @@ class ReservationServiceImplTest {
     }
 
     @Test
+    void applyRejectsRoomThatBecameUnavailableAfterOpeningPage() {
+        room.setRoomStatus(1);
+        when(meetingRoomService.getById(1L)).thenReturn(room);
+        assertEquals("room_maintenance", service.apply(newReservation(), session));
+        verify(reservationMapper, never()).insert(any(Reservation.class));
+    }
+
+    @Test
+    void applyRejectsZeroOrNegativeDuration() {
+        when(meetingRoomService.getById(1L)).thenReturn(room);
+        Reservation reservation = newReservation();
+        reservation.setEndTime(reservation.getStartTime());
+        assertEquals("invalid_time", service.apply(reservation, session));
+        reservation.setEndTime(reservation.getStartTime().minusMinutes(15));
+        assertEquals("invalid_time", service.apply(reservation, session));
+        verify(reservationMapper, never()).insert(any(Reservation.class));
+    }
+
+    @Test
     void applyReturnsOverCapacityWhenAttendeesExceedRoom() {
         // Arrange
         when(meetingRoomService.getById(1L)).thenReturn(room);
@@ -225,8 +244,9 @@ class ReservationServiceImplTest {
         pending.setId(1L);
         pending.setUserId(100L);
         pending.setReservationStatus(0);
+        pending.setStartTime(LocalDateTime.now().plusHours(1));
         when(reservationMapper.selectById(1L)).thenReturn(pending);
-        when(reservationMapper.updateById(any(Reservation.class))).thenReturn(1);
+        when(reservationMapper.update(any(Reservation.class), any(com.baomidou.mybatisplus.core.conditions.Wrapper.class))).thenReturn(1);
 
         // Act
         String code = service.approve(1L);
@@ -270,51 +290,68 @@ class ReservationServiceImplTest {
 
     @Test
     void rejectOnlyRejectsPendingReservations() {
-        // Arrange
-        Reservation pending = new Reservation();
-        pending.setId(1L);
-        pending.setReservationStatus(0);
-        when(reservationMapper.selectById(1L)).thenReturn(pending);
-
-        // Act
+        when(reservationMapper.update(any(Reservation.class), any(com.baomidou.mybatisplus.core.conditions.Wrapper.class)))
+                .thenAnswer(invocation -> {
+                    Reservation rejected = invocation.getArgument(0);
+                    var condition = (com.baomidou.mybatisplus.core.conditions.update.UpdateWrapper<?>) invocation.getArgument(1);
+                    assertEquals(2, rejected.getReservationStatus());
+                    assertEquals("该时段已有教学安排", rejected.getRejectReason());
+                    org.junit.jupiter.api.Assertions.assertTrue(condition.getSqlSegment().contains("reservation_status ="));
+                    org.junit.jupiter.api.Assertions.assertTrue(condition.getParamNameValuePairs().containsValue(0));
+                    return 1;
+                });
         service.reject(1L, "该时段已有教学安排");
-
-        // Assert
-        assertEquals(2, pending.getReservationStatus());
-        assertEquals("该时段已有教学安排", pending.getRejectReason());
-        verify(reservationMapper).updateById(pending);
     }
 
     @Test
     void rejectUsesDefaultReasonWhenBlank() {
-        // Arrange
-        Reservation pending = new Reservation();
-        pending.setId(1L);
-        pending.setReservationStatus(0);
-        when(reservationMapper.selectById(1L)).thenReturn(pending);
-
-        // Act
+        when(reservationMapper.update(any(Reservation.class), any(com.baomidou.mybatisplus.core.conditions.Wrapper.class)))
+                .thenAnswer(invocation -> {
+                    Reservation rejected = invocation.getArgument(0);
+                    assertEquals("该时段无法安排，如有疑问请联系管理员", rejected.getRejectReason());
+                    return 1;
+                });
         service.reject(1L, "  ");
-
-        // Assert
-        assertEquals(2, pending.getReservationStatus());
-        assertEquals("该时段无法安排，如有疑问请联系管理员", pending.getRejectReason());
     }
 
     @Test
-    void rejectIgnoresAlreadyApprovedReservations() {
-        // Arrange
-        Reservation approved = new Reservation();
-        approved.setId(1L);
-        approved.setReservationStatus(1);
-        when(reservationMapper.selectById(1L)).thenReturn(approved);
-
-        // Act
-        service.reject(1L, "该时段已有教学安排");
-
-        // Assert
-        assertEquals(1, approved.getReservationStatus());
+    void rejectReportsNoChangeInsteadOfSuccess() {
+        org.junit.jupiter.api.Assertions.assertThrows(IllegalStateException.class,
+                () -> service.reject(1L, "该时段已有教学安排"));
         verify(reservationMapper, never()).updateById(any(Reservation.class));
+    }
+
+    @Test
+    void rejectValidatesLengthBeforeDatabaseAccess() {
+        org.junit.jupiter.api.Assertions.assertThrows(IllegalArgumentException.class,
+                () -> service.reject(1L, "拒".repeat(201)));
+        org.mockito.Mockito.verifyNoInteractions(reservationMapper);
+    }
+
+    @Test
+    void rejectAcceptsExactlyTwoHundredCharacters() {
+        when(reservationMapper.update(any(Reservation.class), any(com.baomidou.mybatisplus.core.conditions.Wrapper.class)))
+                .thenReturn(1);
+        org.junit.jupiter.api.Assertions.assertDoesNotThrow(() -> service.reject(1L, "拒".repeat(200)));
+    }
+
+    @Test
+    void approveRejectsExpiredPendingWithoutCreatingAttendance() {
+        Reservation pending = newReservation();
+        pending.setReservationStatus(0);
+        pending.setStartTime(LocalDateTime.now().minusMinutes(1));
+        when(reservationMapper.selectById(1L)).thenReturn(pending);
+        assertEquals("expired", service.approve(1L));
+        org.mockito.Mockito.verifyNoInteractions(attendanceRecordService);
+    }
+
+    @Test
+    void approveLosingStatusRaceDoesNotCreateAttendance() {
+        Reservation pending = newReservation();
+        pending.setReservationStatus(0);
+        when(reservationMapper.selectById(1L)).thenReturn(pending);
+        assertEquals("error", service.approve(1L));
+        org.mockito.Mockito.verifyNoInteractions(attendanceRecordService);
     }
 
     // ============ cancel ============
@@ -403,6 +440,7 @@ class ReservationServiceImplTest {
 
     private AttendanceRecord unattendedRecord() {
         AttendanceRecord record = new AttendanceRecord();
+        record.setId(10L);
         record.setReservationId(1L);
         record.setUserId(100L);
         record.setAttendStatus(0);
@@ -470,14 +508,57 @@ class ReservationServiceImplTest {
         when(reservationMapper.selectById(1L))
                 .thenReturn(approvedReservation(LocalDateTime.now().plusMinutes(5)));
         when(attendanceRecordService.findByReservationId(1L)).thenReturn(unattendedRecord());
-        when(attendanceRecordService.updateById(any(AttendanceRecord.class))).thenReturn(true);
+        when(attendanceRecordService.update(any(AttendanceRecord.class), any(com.baomidou.mybatisplus.core.conditions.Wrapper.class)))
+                .thenAnswer(invocation -> {
+                    var condition = (com.baomidou.mybatisplus.core.conditions.update.UpdateWrapper<?>) invocation.getArgument(1);
+                    org.junit.jupiter.api.Assertions.assertTrue(condition.getSqlSegment().contains("attend_status ="));
+                    org.junit.jupiter.api.Assertions.assertTrue(condition.getParamNameValuePairs().containsValue(0));
+                    return true;
+                });
 
         // Act
         String result = service.checkIn(1L, 100L, "1234", "127.0.0.1");
 
         // Assert
         assertEquals("success", result);
-        verify(attendanceRecordService).updateById(any(AttendanceRecord.class));
+        verify(attendanceRecordService).update(any(AttendanceRecord.class), any(com.baomidou.mybatisplus.core.conditions.Wrapper.class));
+    }
+
+    @Test
+    void concurrentCheckInsBothReadZeroButOnlyConditionalUpdateWinnerSucceeds() throws Exception {
+        when(reservationMapper.selectById(1L))
+                .thenReturn(approvedReservation(LocalDateTime.now().plusMinutes(5)));
+        var readers = new java.util.concurrent.CyclicBarrier(2);
+        when(attendanceRecordService.findByReservationId(1L)).thenAnswer(invocation -> {
+            readers.await(5, java.util.concurrent.TimeUnit.SECONDS);
+            return unattendedRecord();
+        });
+        // 模拟数据库对 WHERE attend_status=0 的原子更新；另有断言检查实际条件。
+        var claimed = new java.util.concurrent.atomic.AtomicBoolean();
+        when(attendanceRecordService.update(any(AttendanceRecord.class), any(com.baomidou.mybatisplus.core.conditions.Wrapper.class)))
+                .thenAnswer(invocation -> claimed.compareAndSet(false, true));
+        var executor = java.util.concurrent.Executors.newFixedThreadPool(2);
+        try {
+            var first = executor.submit(() -> service.checkIn(1L, 100L, "1234", "127.0.0.1"));
+            var second = executor.submit(() -> service.checkIn(1L, 100L, "1234", "127.0.0.2"));
+            var results = List.of(first.get(5, java.util.concurrent.TimeUnit.SECONDS),
+                    second.get(5, java.util.concurrent.TimeUnit.SECONDS));
+            assertEquals(1, results.stream().filter("success"::equals).count());
+            assertEquals(1, results.stream().filter("already_checked_in"::equals).count());
+        } finally {
+            executor.shutdownNow();
+        }
+    }
+
+    @Test
+    void checkInLosingConditionalUpdateDoesNotReportSuccess() {
+        when(reservationMapper.selectById(1L))
+                .thenReturn(approvedReservation(LocalDateTime.now().plusMinutes(5)));
+        when(attendanceRecordService.findByReservationId(1L)).thenReturn(unattendedRecord());
+        when(attendanceRecordService.update(any(AttendanceRecord.class), any(com.baomidou.mybatisplus.core.conditions.Wrapper.class)))
+                .thenReturn(false);
+        assertEquals("already_checked_in", service.checkIn(1L, 100L, "1234", "127.0.0.1"));
+        verify(attendanceRecordService, never()).updateById(any(AttendanceRecord.class));
     }
 
     @Test

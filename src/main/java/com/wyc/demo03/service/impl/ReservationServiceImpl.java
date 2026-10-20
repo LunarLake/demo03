@@ -32,7 +32,8 @@ import java.util.concurrent.atomic.AtomicInteger;
  *
  * 事务策略：
  *   apply()、approve()、checkIn() 这三个方法涉及多表写入，用 @Transactional 保证原子性。
- *   reject()、cancel() 是单表单字段更新，依赖 MyBatis-Plus 内置的 updateById，无需显式事务。
+ *   reject() 使用事务内的原子条件更新；cancel() 维持现有单表更新。
+ *   事务本身不能阻止读后写竞争，approve/reject/checkIn 使用状态条件决定是否成功。
  */
 @Service
 @RequiredArgsConstructor
@@ -62,7 +63,7 @@ public class ReservationServiceImpl extends ServiceImpl<ReservationMapper, Reser
     // 这是整个系统最复杂的业务方法，同时处理学生预约和教师预约两条路径。
     //
     // 两条路径的分叉点：
-    //   ┌─ 学生预约 → 状态=0（待审批），等待教师审批
+    //   ┌─ 学生预约 → 状态=0（待审批），等待管理员审批
     //   └─ 教师预约 → 状态=1（自动通过），直接生成签到码
     //
     // 教师预约的"强行覆盖"逻辑也在此方法内：
@@ -99,6 +100,14 @@ public class ReservationServiceImpl extends ServiceImpl<ReservationMapper, Reser
         MeetingRoom room = meetingRoomService.getById(reservation.getRoomId());
         if (room == null) {
             return "room_not_found";
+        }
+
+        if (Integer.valueOf(1).equals(room.getRoomStatus())) {
+            return "room_maintenance";
+        }
+        if (reservation.getStartTime() == null || reservation.getEndTime() == null
+                || !reservation.getEndTime().isAfter(reservation.getStartTime())) {
+            return "invalid_time";
         }
 
         // 校验 2：参会人数是否超过会议室容量
@@ -175,7 +184,7 @@ public class ReservationServiceImpl extends ServiceImpl<ReservationMapper, Reser
             reservation.setReservationStatus(1);
             reservation.setCheckInCode(generateCode());
         } else {
-            // 学生预约：进入待审批状态（状态=0），等待教师审批
+            // 学生预约：进入待审批状态（状态=0），等待管理员审批
             // 签到码暂时为空，审批通过时再生成
             reservation.setReservationStatus(0);
         }
@@ -199,9 +208,9 @@ public class ReservationServiceImpl extends ServiceImpl<ReservationMapper, Reser
     }
 
     // ====================================================================
-    // 方法二：approve —— 教师批准预约
+    // 方法二：approve —— 管理员批准预约
     // ====================================================================
-    // 教师点击"批准"按钮后调用。
+    // 管理员点击"批准"按钮后调用。
     // 两步操作必须在同一个事务中完成（@Transactional）：
     //   1. 更新预约状态为 1（已通过），同时生成 4 位签到码
     //   2. 创建一条签到记录（attendStatus=0），为后续签到核销做准备
@@ -215,7 +224,7 @@ public class ReservationServiceImpl extends ServiceImpl<ReservationMapper, Reser
     //
     // 返回值：
     //   "error"          — 预约不存在或状态不是 0（待审批）
-    //   checkInCode      — 成功时返回生成的 4 位签到码（展示给教师查看）
+    //   checkInCode      — 成功时返回生成的 4 位签到码（展示给管理员查看）
     @Override
     @Transactional(rollbackFor = Exception.class)
     public String approve(Long id) {
@@ -227,13 +236,18 @@ public class ReservationServiceImpl extends ServiceImpl<ReservationMapper, Reser
             return "error";
         }
 
-        // 状态变更：0（待审批）→ 1（已通过）
+        // 过了开始时间不再批准；与定时释放竞争时通过条件更新决定实际结果。
+        LocalDateTime now = LocalDateTime.now();
+        if (reservation.getStartTime() == null || reservation.getStartTime().isBefore(now)) {
+            return "expired";
+        }
         reservation.setReservationStatus(1);
-
-        // 生成 4 位随机签到码（0000~9999），用于用户现场签到核销
         reservation.setCheckInCode(generateCode());
-
-        updateById(reservation);
+        if (baseMapper.update(reservation,
+                new com.baomidou.mybatisplus.core.conditions.update.UpdateWrapper<Reservation>()
+                        .eq("id", id).eq("reservation_status", 0).ge("start_time", now)) != 1) {
+            return "error";
+        }
 
         // 同步创建签到记录（attendStatus=0，表示尚未签到）
         // 这条记录在用户签到时会更新：attendStatus→1 + 写入签到时间 + IP
@@ -243,30 +257,30 @@ public class ReservationServiceImpl extends ServiceImpl<ReservationMapper, Reser
         record.setAttendStatus(0);
         attendanceRecordService.save(record);
 
-        // 返回签到码给 Controller，展示给教师
+        // 返回签到码给 Controller，展示给管理员
         return reservation.getCheckInCode();
     }
 
     // ====================================================================
-    // ★ 核心方法三：reject —— 教师拒绝预约
+    // ★ 核心方法三：reject —— 管理员拒绝预约
     // ====================================================================
-    // 逻辑相对简单，但有一个重要的防御校验：
-    //   只能拒绝状态为 0（待审批）的预约。
-    //   如果预约已被批准、已被拒绝、已被覆盖等 → 直接跳过不做任何操作。
+    // 只能拒绝状态为 0（待审批）的预约；条件更新失败时明确报告状态变化。
     //
-    // 为什么不用 @Transactional？
-    //   只有一个单表的 updateById 操作，MyBatis-Plus 内置了单条 SQL 的原子性，
-    //   不需要额外的事务包装。如果 update 失败，什么都不会发生。
+    // 保留 void 接口；可预期的无操作结果由控制器捕获并显示，不再静默报成功。
     @Override
+    @Transactional(rollbackFor = Exception.class)
     public void reject(Long id, String reason) {
-        Reservation reservation = getById(id);
-        if (reservation != null && reservation.getReservationStatus() == 0) {
-            reservation.setReservationStatus(2);  // 状态 0 → 2（已拒绝）
-            // 拒绝原因（可选）：为空时给默认文案，让申请人明确知道被拒
-            reservation.setRejectReason(reason == null || reason.isBlank()
-                    ? "该时段无法安排，如有疑问请联系管理员"
-                    : reason.trim());
-            updateById(reservation);
+        if (reason != null && reason.length() > 200) {
+            throw new IllegalArgumentException("拒绝原因不能超过200字");
+        }
+        Reservation rejected = new Reservation();
+        rejected.setReservationStatus(2);
+        rejected.setRejectReason(reason == null || reason.isBlank()
+                ? "该时段无法安排，如有疑问请联系管理员" : reason.trim());
+        if (id == null || baseMapper.update(rejected,
+                new com.baomidou.mybatisplus.core.conditions.update.UpdateWrapper<Reservation>()
+                        .eq("id", id).eq("reservation_status", 0)) != 1) {
+            throw new IllegalStateException("该申请不存在或已被处理，本次未执行拒绝");
         }
     }
 
@@ -375,21 +389,19 @@ public class ReservationServiceImpl extends ServiceImpl<ReservationMapper, Reser
             return "error";       // 签到记录不存在或不属于当前用户
         }
 
-        // ===== 第六步：防重复签到 =====
-        // 如果签到记录的 attendStatus 已经是 1，说明之前已经签到成功过。
-        // 这个检查在 @Transactional 的保护下执行，防止并发重复签到：
-        //  即使两个请求同时到达这里，数据库的行锁会保证只有一个能成功更新。
-        if (record.getAttendStatus() == 1) {
+        // 普通事务不能避免读后写竞争；以 attend_status=0 的原子条件更新判定赢家。
+        if (Integer.valueOf(1).equals(record.getAttendStatus())) {
             return "already_checked_in";
         }
-
-        // ===== 执行签到 =====
-        record.setAttendStatus(1);               // 标记为已签到
-        record.setCheckInTime(LocalDateTime.now());  // 记录签到时间
-        record.setIp(ip);                         // 记录签到 IP（用于审计溯源）
-        attendanceRecordService.updateById(record);
-
-        return "success";
+        AttendanceRecord checkedIn = new AttendanceRecord();
+        checkedIn.setAttendStatus(1);
+        checkedIn.setCheckInTime(now);
+        checkedIn.setIp(ip);
+        boolean updated = attendanceRecordService.update(checkedIn,
+                new com.baomidou.mybatisplus.core.conditions.update.UpdateWrapper<AttendanceRecord>()
+                        .eq("id", record.getId()).eq("reservation_id", reservationId)
+                        .eq("user_id", userId).eq("attend_status", 0));
+        return updated ? "success" : "already_checked_in";
     }
 
     // ====================================================================
@@ -449,7 +461,7 @@ public class ReservationServiceImpl extends ServiceImpl<ReservationMapper, Reser
     // ====================================================================
 
     /**
-     * 查询待审批的预约列表（教师审批页面使用）
+     * 查询待审批的预约列表（管理员审批页面使用）
      * SQL：SELECT r.*, u.name AS userName, rm.room_name AS roomName
      *      FROM t_reservation r
      *      JOIN t_user u ON r.user_id = u.id
@@ -503,7 +515,7 @@ public class ReservationServiceImpl extends ServiceImpl<ReservationMapper, Reser
 
     /**
      * 查询单条预约的完整详情（含用户、会议室、签到记录）
-     * 用于"预约详情"页面（教师查看）
+     * 用于"预约详情"页面（管理员查看）
      */
     @Override
     public Map<String, Object> findDetailById(Long id) {

@@ -55,17 +55,18 @@
               role="alert"
             >
               日程数据加载失败，请检查网络后
-              <a href="javascript:location.reload()" class="alert-link"
-                >刷新重试</a
-              >
+              <button type="button" id="retrySchedule" class="btn btn-link alert-link p-0">重新加载排期</button>
             </div>
             <div id="timelineChart" style="height: 200px"></div>
+            <p id="selectionMessage" class="small mb-0" role="status" aria-live="polite"></p>
           </div>
           <div class="card-footer text-muted small">
             <span style="color: #198754">█</span> 空闲可预约 &nbsp;
             <span style="color: #dc3545">█</span> 教师预约 &nbsp;
             <span style="color: #fd7e14">█</span> 学生预约 &nbsp;
-            <span style="color: #198754">▣</span> 已选时段 &nbsp;
+            <span style="color: #6f42c1">█</span> 管理员预约 &nbsp;
+            <span style="color: #997404">█</span> 待审批占用 &nbsp;
+            <span style="color: #0d6efd">▣</span> 已选时段 &nbsp;
             点击绿色区域两次设置起止时间
           </div>
         </div>

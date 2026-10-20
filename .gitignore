@@ -42,3 +42,9 @@ src/main/resources/application-local.yml
 ### Local AI / tool config ###
 .claude/
 
+### Local working data ###
+# AI 会话与项目记忆，不入库
+.workbuddy/
+# 数据库备份与本地导出，不入库
+.backup/
+
