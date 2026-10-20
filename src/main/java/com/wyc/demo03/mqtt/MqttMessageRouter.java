@@ -41,6 +41,11 @@ public class MqttMessageRouter {
     /** 入站消息允许的时钟偏差（秒）。超过即视为陈旧，不再采信。 */
     private static final long FRESH_SECONDS = 90;
 
+    /**
+     * 订阅在应用就绪时执行，但<b>不依赖此刻是否已连上 Broker</b>（BUG-003）：
+     * 未连接时 {@link MqttGateway#subscribe} 只登记意图，连接/重连成功后自动补发，
+     * 因此这里与网关的连接动作谁先谁后都无所谓。
+     */
     @EventListener(ApplicationReadyEvent.class)
     public void subscribe() {
         gateway.subscribe(MqttTopics.SUBSCRIBE_ACK, mqttProperties.getQos(), this::onAck);
