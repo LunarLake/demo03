@@ -672,6 +672,34 @@ class ReservationServiceImplTest {
             stubExisting(r);
             assertEquals("error", service.checkIn(1L, 8L, "1234", "127.0.0.1"));
         }
+
+        @Test
+        @DisplayName("AC-15 签到成功但门禁离线：签到不回滚，如实返回 success_door_failed")
+        void doorDeniedDoesNotRollbackCheckIn() {
+            clock.set(T0);
+            stubExisting(approvedAt(T0.minusMinutes(1)));
+            when(checkinCodeService.verify(1L, "1234")).thenReturn(true);
+            when(reservationMapper.transit(anyLong(), anyInt(), anyInt(), any(), any(), any())).thenReturn(1);
+            when(accessService.openAfterCheckIn(any(), anyLong(), any()))
+                    .thenReturn(AccessService.UnlockResult.deny("DEVICE_OFFLINE", "门禁离线"));
+
+            assertEquals("success_door_failed", service.checkIn(1L, 7L, "1234", "127.0.0.1"));
+            verify(attendanceRecordService).save(any());
+        }
+
+        @Test
+        @DisplayName("AC-15 开门过程抛异常也不能影响签到结果")
+        void doorExceptionDoesNotRollbackCheckIn() {
+            clock.set(T0);
+            stubExisting(approvedAt(T0.minusMinutes(1)));
+            when(checkinCodeService.verify(1L, "1234")).thenReturn(true);
+            when(reservationMapper.transit(anyLong(), anyInt(), anyInt(), any(), any(), any())).thenReturn(1);
+            when(accessService.openAfterCheckIn(any(), anyLong(), any()))
+                    .thenThrow(new IllegalStateException("mqtt down"));
+
+            assertEquals("success_door_failed", service.checkIn(1L, 7L, "1234", "127.0.0.1"));
+            verify(attendanceRecordService).save(any());
+        }
     }
 
     // ====================================================================

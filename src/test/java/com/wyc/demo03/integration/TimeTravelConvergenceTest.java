@@ -184,6 +184,35 @@ class TimeTravelConvergenceTest {
     }
 
     @Test
+    @DisplayName("AC-20 15 分钟预约：签到截止（+5min）与结束提醒（-5min）各自触发、互不干扰")
+    void shortSlotDeadlineAndReminderDoNotInterfere() {
+        LocalDateTime nine = START.toLocalDate().atTime(9, 0);
+        // 一格 15 分钟：签到窗口 [09:00, 09:05)，提醒窗口 [09:10, 09:15)
+        Reservation checkedIn = insert(ReservationStatus.CHECKED_IN.code(), nine, nine.plusMinutes(15));
+        Reservation noShow = insert(ReservationStatus.APPROVED.code(), nine, nine.plusMinutes(15));
+
+        // 09:06 —— 已签到那笔的签到窗口刚关（但它已签到，不该被释放）；
+        //          未签到那笔应被爽约释放
+        converge(nine.plusMinutes(6));
+        assertEquals(ReservationStatus.TIMEOUT_RELEASED.code(), statusOf(noShow.getId()),
+                "未签到的应在窗口关闭后释放");
+        assertEquals(ReservationStatus.CHECKED_IN.code(), statusOf(checkedIn.getId()),
+                "已签到的不能在窗口关闭时被误释放");
+
+        // 09:12 —— 进入提醒窗口，只提醒一次
+        clock.set(nine.plusMinutes(12));
+        List<Reservation> firstRemind = reservationService.remindEnding(nine.plusMinutes(12));
+        assertEquals(1, firstRemind.size(), "只应提醒仍在进行的那笔");
+        assertEquals(checkedIn.getId(), firstRemind.get(0).getId());
+        assertTrue(reservationService.remindEnding(nine.plusMinutes(13)).isEmpty(),
+                "提醒过就不再提醒");
+
+        // 09:16 —— 到期结束
+        converge(nine.plusMinutes(16));
+        assertEquals(ReservationStatus.FINISHED.code(), statusOf(checkedIn.getId()));
+    }
+
+    @Test
     @DisplayName("释放后单元被清空，同一时段可以被别人重新约上")
     void releasedSlotsBecomeAvailable() {
         LocalDateTime nine = START.toLocalDate().atTime(9, 0);

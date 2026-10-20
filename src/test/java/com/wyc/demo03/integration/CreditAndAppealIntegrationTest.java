@@ -47,6 +47,7 @@ class CreditAndAppealIntegrationTest {
     @Autowired private ReservationMapper reservationMapper;
     @Autowired private CreditLogMapper creditLogMapper;
     @Autowired private CreditAccountMapper creditAccountMapper;
+    @Autowired private com.wyc.demo03.mapper.ReservationSlotMapper slotMapper;
     @Autowired private UserService userService;
 
     private User student;
@@ -140,9 +141,9 @@ class CreditAndAppealIntegrationTest {
     }
 
     @Test
-    @DisplayName("申诉成立：写相反数流水对冲，分数回到原值")
+    @DisplayName("申诉成立：写相反数流水对冲，分数回到原值，但单元不恢复")
     void appealRevokeRestoresScore() {
-        insertOverdue();
+        Reservation reservation = insertOverdue();
         reservationService.releaseNoShow(LocalDateTime.now());
         assertEquals(90, score());
 
@@ -157,6 +158,14 @@ class CreditAndAppealIntegrationTest {
 
         assertEquals(100, score(), "撤销后应回到 100");
         assertEquals(1, countLogs(CreditLog.Reason.APPEAL_REVOKE));
+
+        // ★ 关键：申诉成立只撤销扣分，绝不恢复时段。
+        //   时段早就可能被别人订走了，恢复等于制造重叠占用。
+        assertEquals(0, slotMapper.findByReservationId(reservation.getId()).size(),
+                "申诉成立不能恢复占用单元");
+        assertEquals(ReservationStatus.TIMEOUT_RELEASED.code(),
+                reservationMapper.selectById(reservation.getId()).getReservationStatus(),
+                "预约状态也不该被申诉改回来");
     }
 
     @Test

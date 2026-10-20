@@ -1,232 +1,209 @@
-# 会议室预约系统
+# 智慧研讨室预约与门禁管理系统
+
+> 从"纯软件预约"升级为**软硬件结合**：手机 Web 预约 → 服务端判定 → MQTT → STM32 门禁。
+> 本文是项目总览；施工细节见 [`docs/重构改造计划.md`](docs/重构改造计划.md)，
+> 验收对照见 [`docs/acceptance.md`](docs/acceptance.md)。
 
 ## 1. 项目概述
 
-### 1.1 项目目标
+### 1.1 解决什么问题
 
-本系统致力于解决会议室资源分配不均、信息不对称、预约流转效率低等实际问题。核心实现目标如下：
+原来的系统有三个绕不开的痛点：
 
-- **资源可视化**：通过前端横向连续时间彩带（ECharts）直观展示会议室全天占用状态。
-- **分级权限与动态覆盖**：建立合理的权限机制，支持高优先级预约覆盖低优先级预约。
-- **防作弊签到闭环**：通过软硬件分离设计，结合动态验证码、时间窗口校验与并发锁，确保参会人员物理就位，避免资源空占。
-- **资源自动回收**：利用后台定时调度器自动扫表，对超时未签到的无效预约进行释放，最大化资源利用率。
+| 痛点 | 根因 | 现在的做法 |
+|---|---|---|
+| "看着能约，提交被拒" | 待审批的申请也占着时段，同一时段不能多人申请 | **待审批不占单元**，只有已通过/已签到才占用 |
+| 时段粒度混乱 | 前端吸附 15 分钟，后端接受任意时间 | 后端强校验 + **单元化存储**（每格唯一键仲裁） |
+| 签到靠自觉 | 没有物理校验，代签/爽约无法约束 | 现场屏幕码 + 5 分钟窗口 + **门禁开锁** + 信用分 |
 
-## 2. 需求分析
+### 1.2 核心设计
 
-### 2.1 功能性需求
+1. **15 分钟单元**：08:00–22:00 共 56 格/间，单次 1–16 格（15 分钟–4 小时），最多提前 7 天。
+2. **七态状态机**：待审批 / 已通过 / 已拒绝 / 已取消 / 超时释放 / 已签到 / 已结束。
+3. **三层审核**：基础规则（内置 6 条）→ 附加规则（8 个可调参数，版本化）→ 人工审核。
+4. **信用分 + 申诉**：爽约 −10、再犯加倍；申诉 7 日内、每项一次、复核人不得是原审核人。
+5. **一次性开锁指令**：`msgId` 幂等 + `expiresAt` 过期 + `reservationId` 绑定，设备端五步校验。
 
-#### 学生角色（STUDENT）
+## 2. 角色与能力
 
-- **浏览看板**：查看可用会议室列表，过滤维护中的房间。
-- **分时预约**：在独立预约页通过图形时间轴点选空闲时间段，提交预约申请（进入待审批状态）。
-- **我的预约**：查看个人预约历史、审批进度（待审批、已通过、被拒绝、已被覆盖、已结束、超时释放）。
-- **现场签到**：在会议开始前10分钟至开始后15分钟内，输入现场屏幕展示的4位随机签到码进行核销签到。
-- **主动取消**：对尚未开始的预约进行主动取消，释放资源。
+### 学生（STUDENT）
 
-#### 教师角色（TEACHER）
+- 在**排期板**上点选时段（点第一格选开始、第二格选结束），提交后按规则自动通过或转人工
+- 查看签到码、门禁开锁状态、信用分与流水
+- 现场输入屏幕码签到（窗口 `[开始, 开始+5分钟)`），签到成功自动开锁
+- 已签到后可在有效期内**再次开门**（不要求重复输码）
+- 对拒绝/取消/超时释放与扣分提交申诉
 
-- **优先覆盖预约**：教师享有更高优先级，在预约大屏上可直接点选并覆盖学生的预约时段，系统将联动触发冲突变色与状态流转。
+### 教师（TEACHER）
 
-#### 管理员角色（ADMIN）
+- 可**覆盖尚未开始**的学生预约（整笔取消 + 释放单元 + 撤销签到码）
+- 教师之间冲突直接拒绝；已开始的预约不可覆盖
+- 教师预约在单元无冲突时自动通过
 
-- **会议室管理**：会议室的新增、编辑、删除及“维护中”状态切换，前端自动置灰并拦截相关操作。
-- **审批管理**：对学生的预约申请进行“批准”（生成4位签到码）或“拒绝”操作。
-- **控制台总览**：实时掌握可用会议室、待审批流程、今日签到数等看板指标。
-- **数据大屏**：会议室使用率、繁忙时段分布、出勤率统计（ECharts可视化）。
-- **系统日志**：查看全站访问日志（用户名、IP、URL、时间戳）。
+### 管理员（ADMIN）
 
-### 2.2 非功能性需求
+- 审批转人工的申请、查看"为什么进人工"（判定路径与命中规则）
+- 规则配置：调整 8 个附加参数，每次发布生成新版本，历史判定不受影响
+- 申诉复核（不能复核自己提的，也不能复核自己批过的）
+- 设备管理：在线状态、最近指令、测试开锁
+- 手工认定超时占用（−5）与违规使用（−20）——一期没有传感器，只能人工认定
 
-- **安全性**：拒绝明文密码存储，数据库密码必须采用强哈希加密。
-- **越权防御**：前后端双重行级防线，防止越权直连或修改他人预约。
-- **并发性**：核心签到与删除接口需具备原子性，防止恶意多设备狂点导致重复签到或产生无主孤儿数据。
-- **性能与吞吐**：系统日志等高频写库操作与主线程解耦，采用异步线程池处理，避免网络及I/O阻塞。
-
-## 3. 系统设计
-
-### 3.1 总体架构设计
-
-系统采用经典三层B/S架构，遵循MVC设计模式：
-
-- **表现层（View）**：基于Thymeleaf模板引擎进行服务端渲染，配合Bootstrap 5响应式布局和ECharts 6数据可视化图表。
-- **控制层（Controller）**：Spring MVC控制器负责路由分发、参数绑定与校验（JSR-380）、Session会话管理以及视图跳转。
-- **业务逻辑层（Service）**：Service接口定义业务契约，实现类承载核心业务逻辑（密码哈希、冲突检测、审批流转、签到核销等），利用Spring事务管理保证数据一致性。
-- **数据访问层（Mapper）**：基于MyBatis-Plus的BaseMapper接口，通过注解编写自定义SQL，零XML配置。
-- **拦截器层（Interceptor）**：负责登录认证、权限校验及异步请求日志记录。
-
-**技术选型：**
-
-- 后端框架：Spring Boot 3.5（Java 17）
-- 模板引擎：Thymeleaf（服务端渲染）
-- ORM框架：MyBatis-Plus 3.5（BaseMapper + 注解 SQL，零 XML）
-- 数据库：MySQL 8.0（HikariCP 连接池）
-- 安全方案：Session 认证 + 拦截器鉴权 + BCrypt 密码哈希 + CSRF Token + 登录限流（轻量级，不引入 Spring Security）
-- 前端组件：ECharts 6、Bootstrap 5、bootstrap-icons（全部本地化，无 CDN 依赖）
-- 构建工具：Apache Maven（mvnw 包装器）
-- 日程调度：Spring @Scheduled 定时任务 + @Async 异步线程池
-- 测试：JUnit 5 + Mockito + JaCoCo（行覆盖率 86%+）
-
-### 3.2 功能模块设计
-
-#### [1] 用户认证与权限模块
-
-- 登录/注册：验证码登录 + 密码哈希校验
-- 会话管理：登录后注入session，注销时销毁
-- 角色权限：STUDENT / TEACHER / ADMIN三角色，通过拦截器实现权限校验（注册默认学生，教师/管理员由系统创建）
-- 验证码：图形验证码，防止暴力破解
-
-#### [2] 会议室管理模块（管理员专属）
-
-- 会议室CRUD：新增、编辑、删除会议室（名称、容量、设备、状态）
-- 维护状态切换：一键设为“维护中”，前端自动置灰并拦截预约路由
-- 安全删除：删除前校验是否存在活跃预约，有则拒绝
-
-#### [3] 预约与审批模块
-
-- 可视化时间轴预约：ECharts自定义横向时间轴（8:00-22:00），点选起止时间（15分钟粒度），实时显示占用状态
-- 角色着色与冲突变色：区分不同角色预约颜色，高优先级可覆盖低优先级时段（按钮联动变色提示）
-- 学生预约：提交后进入待审批状态
-- 教师预约：自动通过，冲突时覆盖学生预约，与其他教师冲突则拒绝
-- 审批管理：管理员可批准（生成4位随机签到码）或拒绝学生预约
-- 容量校验：预约人数不得超过会议室容量
-
-#### [4] 签到与会控模块
-
-- 动态签到码：批准后生成4位随机签到码，模拟物理屏端展示
-- 时间窗口约束：签到窗口为预约开始前10分钟至开始后15分钟，超时拒绝签到
-- 防重复签到：基于预约ID的行级唯一性校验，防止并发重复签到
-- 主动取消：学生可取消未开始的已批准/待审批预约
-
-#### [5] 数据看板与日志模块（管理员专属）
-
-- 首页看板：实时统计可用会议室数、我的预约数、待审批数、今日签到数
-- 管理看板：ECharts饼图（会议室使用率）、柱状图（繁忙时段统计）、出勤率统计
-- 系统日志：异步记录每次请求的用户名、IP、URL、时间戳，支持列表查看
-
-### 3.3 数据库设计
-
-系统数据库采用MySQL 8.0 + InnoDB引擎，共设计5张核心数据表。
-
-- **t_user（用户表）**：存储用户信息，包含用户名、密码哈希、姓名、角色（STUDENT/TEACHER/ADMIN）、邮箱。
-- **t_meeting_room（会议室表）**：存储会议室名称、容量、设备清单、状态（正常/维护中）。
-- **t_reservation（预约表）**：核心业务表，关联用户和会议室，记录起止时间、预约状态（待审批/已通过/已拒绝/被覆盖/取消/超时释放）、签到码、参会人数。
-- **t_attendance_record（签到记录表）**：记录签到操作，关联预约，包含签到时间、签到状态、IP。
-- **t_log（访问日志表）**：记录HTTP请求的用户名、URL、IP、时间戳。
-
-### 3.4 界面与用户体验设计
-
-系统采用Bootstrap 5响应式布局，主色调蓝色系，侧边栏导航。核心页面：
-
-- 登录/注册页：居中卡片式表单，图形验证码。
-- 首页看板：统计卡片 + 快速入口。
-- 会议室列表页：ECharts柱状图 + 卡片网格，维护状态灰色按钮。
-- 可视化预约时间轴页：自定义甘特图，角色颜色区分，冲突时按钮变色提示。
-- 我的预约页：状态 Tab 筛选（全部/待审批/已通过/已结束）+ 分页表格，含取消/签到操作与拒绝原因展示。
-- 审批列表页：管理员专属，含确认弹窗、拒绝原因输入、人数/容量对照。
-- 签到页面：输入4位签到码，校验时间窗口。
-- 个人中心页：修改姓名/邮箱、修改密码（原密码校验 + 二次确认）。
-- 管理看板：管理员专属，ECharts多图表联动，加载失败有重试提示。
-- 系统日志：管理员专属，分页展示访问日志，支持用户名/URL 筛选。
-
-## 4. 系统实现与部署
-
-### 4.1 开发环境与环境配置
-
-- JDK：17
-- 集成开发环境：IntelliJ IDEA
-- 数据库：MySQL 8.0
-- Web服务器：Spring Boot内嵌Tomcat（端口8080）
-- 构建工具：Apache Maven
-- 版本控制：Git
-- 操作系统：Windows/Linux
-- 浏览器：现代主流浏览器（Chrome/Edge）
-
-### 4.2 快速开始
-
-1. **准备数据库**：创建 `db02` 数据库，并按 3.3 节的表设计建立 5 张表
-2. **配置连接**：复制 `src/main/resources/application-local.yml.example` 为 `application-local.yml`，填写数据库密码（或用环境变量 `DB_USERNAME` / `DB_PASSWORD`，可选的 `DB_HOST` / `DB_PORT` / `DB_NAME`）
-3. **初始化账号**：执行 `mysql -u root -p db02 < sql/init-admin.sql`，创建管理员（`admin` / `admin123`）与教师（`teacher` / `teacher123`）账号；普通学生直接通过注册页注册
-4. **启动项目**：`.\mvnw spring-boot:run`，访问 <http://localhost:8080>
-5. **运行测试**：`.\mvnw test`（107 个测试，JaCoCo 报告在 `target/site/jacoco/index.html`）
-
-> 密码安全提示：`sql/init-admin.sql` 中的默认密码仅用于本地开发，部署前请更换随机强密码（哈希生成方法见脚本注释）。数据库连接信息勿提交仓库。
-
-### 4.3 项目结构与说明
+## 3. 技术架构
 
 ```
-demo03/
-├── pom.xml
-├── mvnw / mvnw.cmd                          # Maven 包装器（免装 Maven）
-├── sql/
-│   ├── init-admin.sql                       # 管理员/教师账号初始化（BCrypt 哈希）
-│   └── migration-reject-reason.sql          # 审批拒绝原因列迁移脚本
-├── CLAUDE.md                                # 面向 AI 助手的项目说明
-└── src/
-    ├── main/
-    │   ├── java/com/wyc/demo03/
-    │   │   ├── Demo03Application.java       # 启动类（@EnableScheduling + @EnableAsync）
-    │   │   ├── common/                      # 拦截器与全局配置
-    │   │   │   ├── RoleInterceptor          #   登录态检查
-    │   │   │   ├── AdminInterceptor         #   管理员权限（会议室/审批/控制台/日志）
-    │   │   │   ├── CsrfInterceptor          #   CSRF Token 校验
-    │   │   │   ├── LogInterceptor           #   访问日志异步记录
-    │   │   │   ├── GlobalExceptionHandler   #   全局异常（API 错误信封/页面重定向）
-    │   │   │   ├── ApiResponse              #   API 统一响应信封
-    │   │   │   ├── RoleConstant             #   角色常量与文案映射
-    │   │   │   ├── MybatisPlusConfig        #   分页插件注册
-    │   │   │   └── WebConfig                #   拦截器路径注册
-    │   │   ├── controller/                  # 控制器层（Main/Room/Reservation/Log/Profile）
-    │   │   ├── entity/                      # 实体类（User/MeetingRoom/Reservation/AttendanceRecord/Log）
-    │   │   ├── mapper/                      # MyBatis-Plus 数据访问（@Select 注解 SQL）
-    │   │   ├── service/                     # 业务接口
-    │   │   ├── service/impl/                # 业务实现（@Transactional 事务）
-    │   │   └── task/                        # 定时任务（超时预约释放、日志清理）
-    │   └── resources/
-    │       ├── application.yml              # 主配置（profile 默认 local）
-    │       ├── static/
-    │       │   ├── js/                      # 甘特图等页面脚本
-    │       │   └── vendor/                  # 本地化前端依赖（Bootstrap/ECharts/Axios）
-    │       └── templates/                   # Thymeleaf 模板（fragments/ 为公共组件）
-    └── test/java/com/wyc/demo03/            # 单元测试（107 例，JaCoCo 覆盖率 86%+）
+手机 Web（Thymeleaf + 原生 JS）
+        │
+        ▼
+Spring Boot 3.5 ── MySQL 8.0（16 张表）
+        │
+        ▼  MQTT（Eclipse Paho）
+   Mosquitto ──► STM32F103C8T6 + ESP8266
+                  ├─ SSD1306 显示签到码/剩余时间
+                  ├─ 蜂鸣器
+                  └─ 12V 电控柜锁
 ```
 
-各包职责说明：
+| 层次 | 技术 |
+|---|---|
+| Web | Spring MVC + Thymeleaf、Bootstrap 5、原生 JS（无前端框架） |
+| 持久化 | MyBatis-Plus 3.5.15 + MySQL 8.0 |
+| 设备 | MQTT 3.1.1（QoS1）、HMAC-SHA256 信封 |
+| 其他 | Hutool（BCrypt / HMAC）、ECharts（管理端看板） |
 
-- `common/` — 拦截器与全局配置：登录认证、角色鉴权、CSRF 防护、访问日志、统一异常处理、分页插件。
-- `controller/` — Spring MVC 控制器，路由映射、参数校验、Session 管理、重定向与闪现消息。
-- `entity/` — 实体类，Lombok `@Data` + MyBatis-Plus `@TableName`，JSR-380 校验注解。
-- `mapper/` — 数据访问层，继承 `BaseMapper`，自定义 SQL 用 `@Select` 注解（联表查询、冲突检测等）。
-- `service/` — 业务接口，定义核心业务契约。
-- `service/impl/` — 业务实现：密码哈希、冲突检测与教师覆盖、审批流转、签到核销、定时任务逻辑，关键操作用 `@Transactional` 保证原子性。
-- `task/` — 定时任务：`ReservationScheduler` 每 60 秒释放超时未签到预约；`LogCleanupScheduler` 每天凌晨 3 点清理 30 天前日志。
-- `templates/` — Thymeleaf 模板，`fragments/` 存放侧边栏、顶栏、公共脚本等组件。
-- `sql/` — 数据库初始化与迁移脚本。
+### 3.1 目录结构
 
-## 5. 总结
+```
+src/main/java/com/wyc/demo03/
+├─ controller/     页面与 JSON 接口
+├─ service/        业务（Reservation / Access / Credit / Appeal / RuleConfig / RoomBoard …）
+├─ rule/           规则引擎 + 6 条基础规则
+├─ domain/         纯计算与枚举（ReservationStatus / SlotSchema / SlotUnit …）
+├─ entity/ mapper/ MyBatis-Plus
+├─ mqtt/           信封、HMAC、网关（Paho / 进程内）、门禁实现
+├─ simulator/      设备模拟器（顶替 STM32）
+├─ device/         门禁与屏幕通知端口
+├─ task/           定时收敛与日志滚动
+└─ common/         拦截器、异常处理、统一响应
 
-### 已完成功能
+sql/               schema-v2.sql / migrate-v1-to-v2.sql / init-demo.sql
+deploy/mosquitto/  mosquitto.conf + ACL + 部署说明
+docs/              施工图、验收对照、测试盘点
+scripts/           mqtt-e2e.sh（门禁链路证据收集）
+```
 
-- 三角色权限认证（学生/教师/管理员职责分离，Session + 拦截器；注册强制学生，教师/管理员由 SQL 初始化）
-- 用户登录/注册（图形验证码 + BCrypt 密码哈希 + 存量明文密码登录即迁移）
-- 安全防护：CSRF Token + SameSite Cookie、登录失败限流（5 次锁 15 分钟）、签到码防枚举（5 次锁定）、注册验证码
-- 会议室管理（CRUD + 维护状态切换 + 删除前活跃预约守卫）
-- ECharts 可视化甘特图时间轴预约（角色区分着色 + 教师覆盖学生 + 冲突变色提示）
-- 审批管理（确认弹窗 + 拒绝原因展示 + 人数/容量对照）
-- 时间窗口签到（开始前10分钟~开始后15分钟）+ 定时任务超时释放无效预约
-- 个人中心（修改密码/更新资料，session 即时同步）
-- 我的预约状态筛选（全部/待审批/已通过/已结束）与分页
-- 首页统计看板 + 管理数据大屏（使用率/繁忙时段/出勤率）
-- 系统访问日志（异步记录 + 分页筛选 + 30 天定期清理）
-- API 统一响应信封（success/data/message）+ 全局异常处理
-- 前端静态资源本地化（内网无 CDN 依赖，加载失败有兜底提示）
-- 自动化测试 107 例（JaCoCo 行覆盖率 86%+）
+### 3.2 数据库（16 张表）
 
-### 可改进方向
+| 分组 | 表 | 说明 |
+|---|---|---|
+| 基础 | `t_user`、`t_meeting_room`、`t_log` | 用户、房间、访问日志 |
+| 预约 | `t_reservation`、`t_reservation_slot`、`t_checkin_code`、`t_attendance_record` | 单据、**占用单元**、签到码、签到记录 |
+| 规则 | `t_rule_version`、`t_rule_config` | 规则版本与参数快照 |
+| 信用 | `t_credit_account`、`t_credit_log` | 账户（缓存）与流水（账本） |
+| 申诉 | `t_appeal` | 工单，独立于预约状态机 |
+| 设备 | `t_device`、`t_device_command`、`t_access_log` | 设备、一次性指令、开门记录 |
+| 审计 | `t_audit_log` | 业务审计（与访问日志分开） |
 
-- 周期性预约（每周例会一键重复）
-- 预约增加会议主题/用途字段
-- 扫码签到（物理屏投二维码）
-- 邮件/短信状态通知
-- Docker 化部署
-- 移动端适配
-- 密码找回流程
+关键约束：`t_reservation_slot` 的 `UNIQUE KEY (room_id, slot_date, slot_index)`。
+并发批准时的仲裁完全靠它——撞键即整条 INSERT 回滚，不会出现"插了一半"的占用。
+
+## 4. 快速开始
+
+### 4.1 环境
+
+- JDK 21（项目带 `mvnw`，无需另装 Maven）
+- MySQL 8.0，端口 3306
+
+### 4.2 初始化数据库
+
+```bash
+mysql -u root -p < sql/schema-v2.sql
+```
+
+演示账号（统一密码 `demo123`）：
+
+| 账号 | 角色 |
+|---|---|
+| `student01` / `student02` / `student03` | 学生 |
+| `teacher01` | 教师 |
+| `admin01` | 管理员 |
+
+### 4.3 启动
+
+```bash
+# Windows Git Bash 下指定 JDK（本机默认 java 可能是 JRE 1.8）
+export JAVA_HOME="C:/Users/<用户名>/.jdks/ms-21.0.12.1"
+export PATH="/c/Users/<用户名>/.jdks/ms-21.0.12.1/bin:$PATH"
+
+./mvnw spring-boot:run
+```
+
+> ⚠️ 若环境中存在 `SERVER__PORT` 变量（WorkBuddy 会注入），它会顶掉 `server.port`
+> 并导致"端口被占用"的误报。启动前 `unset SERVER__PORT` 或显式加 `--server.port=8080`。
+
+### 4.4 三种门禁形态
+
+| 形态 | 启动方式 | 说明 |
+|---|---|---|
+| **A 默认** | `./mvnw spring-boot:run` | 门禁只记录不执行，日志标 `[模拟门禁]` |
+| **B 协议全链路** | `-Dspring-boot.run.profiles=local,mqtt-demo` | 进程内总线，无需 Broker；控制台可见 `[LOCK] PULSE 3000ms` |
+| **C 真实 Broker** | `MQTT_MODE=paho DOOR_MODE=mqtt` + Mosquitto | 见 [`deploy/mosquitto/README.md`](deploy/mosquitto/README.md) |
+
+> ★ 形态 B **必须同时带 `local`**：命令行指定 profile 会顶掉默认 profile，
+> 导致 `application-local.yml` 里的数据库密码不加载。
+
+### 4.5 演示前复位
+
+```bash
+mysql -u root -p db02 < sql/init-demo.sql
+```
+
+清空预约、签到、信用、申诉、日志，保留账号/房间/设备/规则版本。
+
+## 5. 页面清单
+
+| 路径 | 说明 |
+|---|---|
+| `/reservation/board` | **预约排期板**（2 房间 × 56 格，两段点选） |
+| `/my-reservations` | 我的预约（7 态徽章、签到、开门、取消、申诉入口） |
+| `/credit` | 信用分与流水 |
+| `/appeal`、`/appeal/new` | 我的申诉与提交 |
+| `/reservation/approve-list` | 审批（含"为什么进人工"、24h 超办预警） |
+| `/appeal/review` | 申诉复核台 |
+| `/admin/rules` | 附加规则配置与版本历史 |
+| `/admin/devices` | 设备管理（在线状态、指令记录、测试开锁） |
+| `/reservation/detail/{id}` | 预约详情（时间线、开门记录、人工认定） |
+
+移动端：<768px 侧边栏变抽屉，排期板横向滑动、操作栏吸底。
+
+## 6. 测试
+
+```bash
+./mvnw test          # 295 tests
+```
+
+| 层次 | 代表用例 |
+|---|---|
+| 领域单测 | 7×7 状态迁移矩阵、15 分钟单元边界、规则判定顺序 |
+| 业务单测 | 提交/审批/取消/签到/信用/申诉/开门（Mock 数据层） |
+| 真库集成 | 唯一键仲裁、并发批准冲突、教师覆盖、申诉对冲 |
+| MQTT 协议 | 逐字段篡改、重放、过期、跨预约绑定、伪造回执 |
+| 时间旅行 | 用可拨动 Clock 把一整天压进毫秒 |
+| 页面冒烟 | 完整 Spring 上下文渲染 12 个页面 + 排期板接口契约 |
+
+## 7. 文档索引
+
+| 文档 | 内容 |
+|---|---|
+| [`docs/重构改造计划.md`](docs/重构改造计划.md) | 施工图：冲突清单、数据模型、状态机、分阶段任务与**实际进度记录** |
+| [`docs/acceptance.md`](docs/acceptance.md) | AC-01 ~ AC-30 逐条对照与手工验收清单 |
+| [`docs/test-inventory.md`](docs/test-inventory.md) | 基线测试盘点与 P2 重写结果 |
+| [`deploy/mosquitto/README.md`](deploy/mosquitto/README.md) | MQTT 部署、主题约定、设备侧五步校验 |
+| [`sql/schema-v2.sql`](sql/schema-v2.sql) | 建表 + 演示数据 |
+
+## 8. 已知限制
+
+- 真实 Mosquitto 与 STM32 未在本机联调（`PahoMqttGateway` 只有编译保证，
+  协议逻辑由进程内实现全覆盖）；硬件到货后需按 `deploy/mosquitto/README.md` 走一遍形态 C。
+- 超时占用与违规使用靠管理员手工认定，一期无传感器。
+- 审计日志只保留 7 天，超过期限的判定依据不再可查（因此判定信息写在业务表上）。
+- `PermissionInterceptor`（权限点模型）尚未落地，管理路由仍按角色拦截。
