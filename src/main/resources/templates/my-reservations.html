@@ -15,7 +15,7 @@
         <div th:if="${info != null}" class="alert" role="alert"
              th:classappend="${infoType == 'success' ? 'alert-success' : (infoType == 'danger' ? 'alert-danger' : 'alert-info')}"
              th:text="${info}"></div>
-        <p class="text-muted small">待审批申请超过开始时间将失效；已通过的预约请在开始前10分钟至开始后15分钟内签到，否则将自动释放。</p>
+        <p class="text-muted small">待审批申请超过开始时间将失效；已通过的预约请在<b>开始时刻起 5 分钟内</b>签到，逾期未签到将自动释放并记爽约。</p>
         <div class="card summary-card">
           <div
             class="card-header bg-white border-0 d-flex justify-content-between align-items-center"
@@ -133,8 +133,9 @@
                     ></div>
                   </td>
                   <td>
-                    <span th:if="${r['checkInCode'] != null}" th:text="${r['checkInCode']}"></span>
-                    <span th:unless="${r['checkInCode'] != null}">—</span>
+                    <span th:if="${codeVisibleOnWeb and r['checkInCode'] != null}" th:text="${r['checkInCode']}"></span>
+                    <span th:if="${!codeVisibleOnWeb}" class="text-muted small">请见现场屏幕</span>
+                    <span th:if="${codeVisibleOnWeb and r['checkInCode'] == null}">—</span>
                     <div
                       th:if="${r['checkInCode'] != null and r['codeRevokedAt'] != null}"
                       class="small text-muted"
@@ -157,7 +158,7 @@
                   </td>
                   <td>
                     <a
-                      th:if="${r['reservation_status'] == 1 and r['check_in_code'] != null and (r['attend_status'] == null or r['attend_status'] == 0)}"
+                      th:if="${r['reservation_status'] == 1 and (r['attend_status'] == null or r['attend_status'] == 0)}"
                       th:href="@{/reservation/check-in/{id}(id=${r.id})}"
                       class="btn btn-sm btn-outline-success"
                     >

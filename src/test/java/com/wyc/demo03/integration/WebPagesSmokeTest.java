@@ -13,9 +13,11 @@ import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.transaction.annotation.Transactional;
 
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.view;
 
 /**
  * 页面冒烟：在**完整 Spring 上下文**里渲染真实模板（含 fragments、拦截器、真实数据）。
@@ -32,6 +34,7 @@ class WebPagesSmokeTest {
 
     @Autowired private MockMvc mvc;
     @Autowired private UserService userService;
+    @Autowired private com.wyc.demo03.service.ReservationService reservationService;
 
     private MockHttpSession studentSession;
     private MockHttpSession adminSession;
@@ -94,6 +97,28 @@ class WebPagesSmokeTest {
     }
 
     @Test
+    @DisplayName("BUG-001 已通过且未签到的预约必须出现签到入口（不依赖网页能否拿到码）")
+    void approvedReservationShowsCheckInEntry() throws Exception {
+        var start = java.time.LocalDate.now().plusDays(3).atTime(14, 0);
+        com.wyc.demo03.entity.Reservation form = new com.wyc.demo03.entity.Reservation();
+        form.setRoomId(1L);
+        form.setStartTime(start);
+        form.setEndTime(start.plusMinutes(30));
+        form.setAttendeeCount(2);
+
+        var created = reservationService.submit(form,
+                userService.lambdaQuery().eq(User::getUsername, "student01").one().getId(), "STUDENT");
+        org.junit.jupiter.api.Assertions.assertTrue(created.accepted(), "前置条件：申请应被接受");
+
+        mvc.perform(get("/my-reservations").session(studentSession))
+                .andExpect(status().isOk())
+                .andExpect(content().string(org.hamcrest.Matchers.containsString(
+                        "/reservation/check-in/" + created.reservationId())))
+                .andExpect(content().string(org.hamcrest.Matchers.containsString(
+                        String.valueOf(created.checkInCode()))));
+    }
+
+    @Test
     @DisplayName("排期板接口：2 个房间 × 56 格，状态字段可直接被前端消费")
     void boardApiReturnsFullGrid() throws Exception {
         String tomorrow = java.time.LocalDate.now().plusDays(1).toString();
@@ -107,6 +132,36 @@ class WebPagesSmokeTest {
                 .andExpect(jsonPath("$.data.rooms[0].slots.length()").value(56))
                 .andExpect(jsonPath("$.data.rooms[0].slots[0].state").isString())
                 .andExpect(jsonPath("$.data.rooms[0].slots[0].actionable").isBoolean());
+    }
+
+    @Test
+    @DisplayName("BUG-008 注册开关关闭时，合法注册请求也不会创建账号")
+    void registrationDisabledRejectsSignup() throws Exception {
+        long before = userService.count();
+
+        MockHttpSession session = new MockHttpSession();
+        session.setAttribute("_csrf", "tok");
+
+        mvc.perform(post("/registerAction").session(session)
+                        .param("_csrf", "tok")
+                        .param("username", "intruder01")
+                        .param("password", "abc123456")
+                        .param("name", "入侵者")
+                        .param("captcha", "0000"))
+                .andExpect(view().name("register"));
+
+        org.junit.jupiter.api.Assertions.assertEquals(before, userService.count(),
+                "关闭注册时不得创建任何账号");
+    }
+
+    @Test
+    @DisplayName("BUG-008 注册页在关闭时显示明确说明，且不给注册表单")
+    void registerPageExplainsDisabled() throws Exception {
+        mvc.perform(get("/register"))
+                .andExpect(status().isOk())
+                .andExpect(content().string(org.hamcrest.Matchers.containsString("未开放自助注册")))
+                .andExpect(content().string(org.hamcrest.Matchers.not(
+                        org.hamcrest.Matchers.containsString("action=\"/registerAction\""))));
     }
 
     @Test

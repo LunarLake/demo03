@@ -1,6 +1,8 @@
 package com.wyc.demo03.controller;
 
 import com.wyc.demo03.common.ApiResponse;
+import com.wyc.demo03.config.DoorProperties;
+import com.wyc.demo03.config.SlotProperties;
 import com.wyc.demo03.common.SlotConflictException;
 import com.wyc.demo03.entity.MeetingRoom;
 import com.wyc.demo03.entity.Reservation;
@@ -42,17 +44,38 @@ public class ReservationController {
     private final AccessService accessService;
     private final RoomBoardService roomBoardService;
     private final RuleConfigService ruleConfigService;
+    private final SlotProperties slotProperties;
+    private final DoorProperties doorProperties;
 
     public ReservationController(ReservationService reservationService,
                                  MeetingRoomService meetingRoomService,
                                  AccessService accessService,
                                  RoomBoardService roomBoardService,
-                                 RuleConfigService ruleConfigService) {
+                                 RuleConfigService ruleConfigService,
+                                 SlotProperties slotProperties,
+                                 DoorProperties doorProperties) {
         this.reservationService = reservationService;
         this.meetingRoomService = meetingRoomService;
         this.accessService = accessService;
         this.roomBoardService = roomBoardService;
         this.ruleConfigService = ruleConfigService;
+        this.slotProperties = slotProperties;
+        this.doorProperties = doorProperties;
+    }
+
+    /**
+     * 签到码是否允许在网页上直接看到。
+     *
+     * <p>只有"没有真实屏幕"（{@code app.door.mode=log}）时才允许 —— 否则学生能在宿舍看到码，
+     * "现场看屏输码"这个到场依据就失效了。接了真设备就必须只在屏幕上显示。
+     */
+    private boolean codeVisibleOnWeb() {
+        return "log".equalsIgnoreCase(doorProperties.getMode());
+    }
+
+    private void exposeCheckinPolicy(Model model) {
+        model.addAttribute("codeVisibleOnWeb", codeVisibleOnWeb());
+        model.addAttribute("checkinWindowMinutes", slotProperties.getCheckinWindowMinutes());
     }
 
     // ====================================================================
@@ -98,7 +121,13 @@ public class ReservationController {
         }
         Long userId = (Long) session.getAttribute("Id");
         String role = (String) session.getAttribute("role");
-        ReservationService.SubmitResult result = reservationService.submit(form, userId, role);
+        ReservationService.SubmitResult result;
+        try {
+            result = reservationService.submit(form, userId, role);
+        } catch (SlotConflictException ex) {
+            // 唯一键仲裁失败：事务已回滚，这里只负责把原因说清楚
+            return ApiResponse.fail("该时段刚被其他人占用，请重新选择");
+        }
         if (!result.accepted()) {
             return ApiResponse.fail(result.message());
         }
@@ -128,15 +157,20 @@ public class ReservationController {
     public String apply(@Valid Reservation reservation, BindingResult bindingResult,
                         HttpSession session, RedirectAttributes ra) {
         if (bindingResult.hasErrors()) {
-            return fail(ra, "请填写完整的预约信息！", "/rooms");
+            return fail(ra, "请填写完整的预约信息！", "/reservation/board");
         }
 
         Long userId = (Long) session.getAttribute("Id");
         String role = (String) session.getAttribute("role");
 
-        ReservationService.SubmitResult result = reservationService.submit(reservation, userId, role);
+        ReservationService.SubmitResult result;
+        try {
+            result = reservationService.submit(reservation, userId, role);
+        } catch (SlotConflictException ex) {
+            return fail(ra, "该时段刚被其他人占用，请回到排期板重新选择", "/reservation/board");
+        }
         if (!result.accepted()) {
-            return fail(ra, result.message(), "/rooms");
+            return fail(ra, result.message(), "/reservation/board");
         }
 
         ra.addFlashAttribute("infoType", "success");
@@ -164,6 +198,7 @@ public class ReservationController {
                 new com.baomidou.mybatisplus.extension.plugins.pagination.Page<>(page, size),
                 userId, status));
         model.addAttribute("status", status);
+        exposeCheckinPolicy(model);
         return "my-reservations";
     }
 
@@ -176,6 +211,7 @@ public class ReservationController {
         model.addAttribute("approvals", reservationService.findApprovals());
         model.addAttribute("overdue", reservationService.countPendingOverdue(dueHours));
         model.addAttribute("dueHours", dueHours);
+        exposeCheckinPolicy(model);
         return "approve-list";
     }
 
@@ -250,6 +286,8 @@ public class ReservationController {
     @GetMapping("/reservation/check-in/{id}")
     public String checkIn(@PathVariable Long id, Model model) {
         model.addAttribute("reservationId", id);
+        model.addAttribute("checkInFinished", false);
+        exposeCheckinPolicy(model);
         return "check-in";
     }
 
@@ -265,6 +303,7 @@ public class ReservationController {
                 || "already_checked_in".equals(result) || "expired".equals(result)
                 || "too_many_attempts".equals(result) || "error".equals(result);
         model.addAttribute("checkInFinished", finished);
+        exposeCheckinPolicy(model);
         model.addAttribute("infoType", result.startsWith("success") ? "success" : "danger");
         model.addAttribute("info", switch (result) {
             case "success" -> "签到成功！门禁已开锁，请推门进入。";
@@ -324,6 +363,7 @@ public class ReservationController {
         }
         model.addAttribute("detail", detail);
         model.addAttribute("accessLogs", accessService.recentLogs(id));
+        exposeCheckinPolicy(model);
         return "reservation-detail";
     }
 

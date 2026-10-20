@@ -32,7 +32,7 @@
                             <tr th:if="${detail['decision_path'] != null}"><td class="text-muted">判定路径</td><td th:text="${detail['decision_path']}"></td></tr>
                             <tr th:if="${detail['hit_rule_codes'] != null}"><td class="text-muted">命中规则</td><td th:text="${detail['hit_rule_codes']}"></td></tr>
                             <tr th:if="${detail['decision_reason'] != null}"><td class="text-muted">处理原因</td><td th:text="${detail['decision_reason']}"></td></tr>
-                            <tr th:if="${detail['checkInCode'] != null}"><td class="text-muted">签到码</td>
+                            <tr th:if="${codeVisibleOnWeb and detail['checkInCode'] != null}"><td class="text-muted">签到码</td>
                                 <td><span th:text="${detail['checkInCode']}"></span>
                                     <span th:if="${detail['codeRevokedAt'] != null}" class="badge bg-secondary ms-1">已失效</span>
                                 </td>

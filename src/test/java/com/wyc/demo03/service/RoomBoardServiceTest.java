@@ -179,6 +179,36 @@ class RoomBoardServiceTest {
     }
 
     @Test
+    @DisplayName("BUG-010 10:01 时 10:00 那格必须不可选（与后端 start<now 拒绝保持一致）")
+    void startedSlotIsNotActionable() {
+        MutableClock late = MutableClock.at(TODAY.atTime(10, 1));
+        RoomBoardService lateService = new RoomBoardService(meetingRoomMapper, reservationMapper,
+                reservationSlotMapper, schema, late);
+
+        RoomBoardService.Board board = lateService.build(TODAY, ME);
+
+        // 10:00–10:15 已经开始了 1 分钟：后端会拒绝 start<now，界面不能再标成可选
+        assertEquals("PAST", slotAt(board, 0, 8).state());
+        assertFalse(slotAt(board, 0, 8).actionable(), "已开始的格子不能可选");
+        // 10:15–10:30 尚未开始
+        assertEquals("FREE", slotAt(board, 0, 9).state());
+        assertTrue(slotAt(board, 0, 9).actionable());
+    }
+
+    @Test
+    @DisplayName("开始时刻恰好等于 now 时仍可选（后端允许 start == now，界面不能提前禁用）")
+    void exactStartIsStillActionable() {
+        MutableClock exact = MutableClock.at(TODAY.atTime(10, 0));
+        RoomBoardService exactService = new RoomBoardService(meetingRoomMapper, reservationMapper,
+                reservationSlotMapper, schema, exact);
+
+        RoomBoardService.Board board = exactService.build(TODAY, ME);
+
+        assertEquals("FREE", slotAt(board, 0, 8).state());
+        assertTrue(slotAt(board, 0, 8).actionable());
+    }
+
+    @Test
     @DisplayName("超出可预约天数：整板不可约，但仍返回数据供查看")
     void tooFarAhead() {
         LocalDate far = TODAY.plusDays(8);

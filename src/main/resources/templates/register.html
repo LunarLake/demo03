@@ -160,8 +160,11 @@
       <section class="form-panel">
         <div class="register-card">
           <h2 class="register-title">用户注册</h2>
+          <div th:if="${registrationDisabled}" class="alert alert-warning mt-3" role="alert">
+            当前环境<b>未开放自助注册</b>。请使用管理员分配的账号登录；需要新账号请联系管理员开通。
+          </div>
           <p class="register-desc">请输入基础信息完成账号注册</p>
-          <form th:action="@{/registerAction}" method="post" novalidate>
+          <form th:action="@{/registerAction}" method="post" novalidate th:if="${!registrationDisabled}">
             <input type="hidden" name="_csrf" th:value="${_csrf}" />
             <div class="mb-3">
               <label for="username" class="form-label">用户名</label>

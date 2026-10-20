@@ -35,6 +35,13 @@ import java.io.IOException;
  */
 @Controller
 public class MainController {
+
+    /**
+     * 注册开关。演示环境默认关闭（计划 C16/Q4）：账号由管理员初始化，
+     * 开放注册会让"谁能进这个系统"失去控制。
+     */
+    @org.springframework.beans.factory.annotation.Value("${app.registration.enabled:false}")
+    private boolean registrationEnabled;
     private final UserService userService;
     private final MeetingRoomService meetingRoomService;
     private final AttendanceRecordService attendanceRecordService;
@@ -97,7 +104,10 @@ public class MainController {
     // GET /register —— 注册页面
     // ====================================================================
     @GetMapping("/register")
-    public String register() {
+    public String register(Model model) {
+        if (!registrationEnabled) {
+            model.addAttribute("registrationDisabled", true);
+        }
         return "register";
     }
 
@@ -187,6 +197,13 @@ public class MainController {
     @PostMapping("/registerAction")
     public String registerAction(@Valid User user, BindingResult bindingResult,
                                  String captcha, HttpSession session, Model model) {
+        // 关闭注册时必须在**任何副作用之前**拒绝，不能先建号再提示
+        if (!registrationEnabled) {
+            model.addAttribute("registrationDisabled", true);
+            model.addAttribute("info", "当前环境未开放注册，请联系管理员开通账号。");
+            return "register";
+        }
+
         // ★ BindingResult 拦截逻辑：
         //   hasErrors() → 说明 @NotBlank 等注解校验未通过（用户留空了必填字段）
         if (bindingResult.hasErrors()) {

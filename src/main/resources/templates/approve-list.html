@@ -152,7 +152,7 @@
                 <strong id="approveRoom"></strong> 的预约申请？
               </p>
               <p class="text-muted small mb-0">
-                批准后生成4位签到码，申请人可在“我的预约”查看；会议开始后15分钟内未签到将释放预约。
+                <span th:if="${codeVisibleOnWeb}">批准后生成 4 位签到码（当前为模拟门禁，申请人可在“我的预约”查看）。</span><span th:unless="${codeVisibleOnWeb}">批准后生成 4 位签到码，仅在门禁屏幕显示。</span> 预约开始后 <b th:text="${checkinWindowMinutes}">5</b> 分钟内未签到将释放并记爽约。
               </p>
             </div>
             <div class="modal-footer">

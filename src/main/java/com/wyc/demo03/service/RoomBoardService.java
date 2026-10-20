@@ -151,8 +151,12 @@ public class RoomBoardService {
         if (closed) {
             return new Slot(index, label, SlotState.CLOSED.name(), false, "房间维护中");
         }
-        if (!end.isAfter(now)) {
-            return new Slot(index, label, SlotState.PAST.name(), false, null);
+        // 可选性必须与后端提交校验同一契约：SlotSchema 拒绝 start < now。
+        // 因此这里用**开始时刻**判断，而不是结束时刻 —— 否则 10:01 时 10:00–10:15 会显示可选，
+        // 用户点了却收到"不能预约过去的时间"。开始时刻恰好等于 now 时后端允许，这里也保持可选。
+        if (start.isBefore(now)) {
+            return new Slot(index, label, SlotState.PAST.name(), false,
+                    "该时段已开始，无法预约");
         }
         Long reservationId = occupied.get(index);
         if (reservationId != null) {

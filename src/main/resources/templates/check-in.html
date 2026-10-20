@@ -21,8 +21,9 @@
                   style="font-size: 3rem"
                 ></i>
                 <h3 class="mt-3">签到验证</h3>
-                <p class="text-muted">请输入“我的预约”中显示的4位签到码</p>
-                <p class="text-muted small">会议开始前10分钟开放签到，开始后15分钟截止；逾期未签到将自动释放预约。</p>
+                <p class="text-muted" th:if="${codeVisibleOnWeb}">请输入 4 位签到码（未接门禁时可在此页面附近查看）</p>
+                <p class="text-muted" th:unless="${codeVisibleOnWeb}">请输入门禁屏幕上显示的 4 位签到码</p>
+                <p class="text-muted small">签到在<b>预约开始时刻</b>开放，<b>开始后 <span th:text="${checkinWindowMinutes}">5</span> 分钟</b>截止（短预约以结束时刻为上限）；逾期未签到将自动释放并记爽约。</p>
                 <p
                   th:if="${info != null}"
                   class="fw-bold"

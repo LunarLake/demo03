@@ -47,6 +47,8 @@ class ControllerLayerTest {
     private RoomBoardService roomBoardService;
     @Mock
     private com.wyc.demo03.service.RuleConfigService ruleConfigService;
+    private final com.wyc.demo03.config.SlotProperties slotProps = new com.wyc.demo03.config.SlotProperties();
+    private final com.wyc.demo03.config.DoorProperties doorProps = new com.wyc.demo03.config.DoorProperties();
     @Mock
     private AttendanceRecordService attendanceRecordService;
     @Mock
@@ -55,14 +57,15 @@ class ControllerLayerTest {
     private LoginAttemptService loginAttemptService;
 
     private MockMvc mockMvc;
+    private MainController mainController;
 
     @BeforeEach
     void setUp() {
         org.mockito.Mockito.lenient().when(ruleConfigService.currentParams())
                 .thenReturn(com.wyc.demo03.domain.RuleParams.defaults());
-        MainController mainController = new MainController(userService, meetingRoomService,
+        mainController = new MainController(userService, meetingRoomService,
                 attendanceRecordService, reservationService, loginAttemptService);
-        ReservationController reservationController = new ReservationController(reservationService, meetingRoomService, accessService, roomBoardService, ruleConfigService);
+        ReservationController reservationController = new ReservationController(reservationService, meetingRoomService, accessService, roomBoardService, ruleConfigService, slotProps, doorProps);
         RoomController roomController = new RoomController(meetingRoomService, reservationService);
         com.wyc.demo03.service.LogService logService = org.mockito.Mockito.mock(com.wyc.demo03.service.LogService.class);
         org.mockito.Mockito.lenient().when(logService.list()).thenReturn(java.util.List.of());
@@ -198,6 +201,8 @@ class ControllerLayerTest {
 
     @Test
     void registerActionRejectsMissingCaptcha() throws Exception {
+        // 注册默认关闭（BUG-008）；本用例验证的是"开启后"的校验链
+        org.springframework.test.util.ReflectionTestUtils.setField(mainController, "registrationEnabled", true);
         mockMvc.perform(post("/registerAction")
                         .param("username", "newuser")
                         .param("password", "123456")
@@ -210,6 +215,7 @@ class ControllerLayerTest {
 
     @Test
     void registerActionRejectsBlankFields() throws Exception {
+        org.springframework.test.util.ReflectionTestUtils.setField(mainController, "registrationEnabled", true);
         mockMvc.perform(post("/registerAction")
                         .param("username", "")
                         .param("password", "")
@@ -223,14 +229,14 @@ class ControllerLayerTest {
     // ============ 预约/审批流程 ============
 
     @Test
-    void applyWithInvalidDataRedirectsToRooms() throws Exception {
+    void applyWithInvalidDataRedirectsToBoard() throws Exception {
         mockMvc.perform(post("/reservation/apply"))
                 .andExpect(status().is3xxRedirection())
-                .andExpect(redirectedUrl("/rooms"));
+                .andExpect(redirectedUrl("/reservation/board"));
     }
 
     @Test
-    @DisplayName("申请被规则拒绝时回到房间列表并带出规则给出的原因")
+    @DisplayName("申请被规则拒绝时回到排期板并带出规则给出的原因")
     void applyRejectedShowsRuleMessage() throws Exception {
         // Arrange
         MockHttpSession session = new MockHttpSession();
@@ -249,7 +255,7 @@ class ControllerLayerTest {
                         .param("attendeeCount", "5")
                         .param("_csrf", "token"))
                 .andExpect(status().is3xxRedirection())
-                .andExpect(redirectedUrl("/rooms"))
+                .andExpect(redirectedUrl("/reservation/board"))
                 .andExpect(flash().attribute("info", "所选时段已被占用，请选择其他时间"));
     }
 
@@ -438,7 +444,7 @@ class ControllerLayerTest {
 
         mockMvc = MockMvcBuilders.standaloneSetup(
                         new MainController(userService, meetingRoomService, attendanceRecordService, reservationService, loginAttemptService),
-                        new ReservationController(reservationService, meetingRoomService, accessService, roomBoardService, ruleConfigService),
+                        new ReservationController(reservationService, meetingRoomService, accessService, roomBoardService, ruleConfigService, slotProps, doorProps),
                         new RoomController(meetingRoomService, reservationService),
                         new LogController(logService, reservationService, attendanceRecordService))
                 .setViewResolvers(new InternalResourceViewResolver("/WEB-INF/views/", ".html"))

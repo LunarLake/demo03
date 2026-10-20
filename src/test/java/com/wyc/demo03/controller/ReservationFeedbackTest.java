@@ -24,7 +24,7 @@ class ReservationFeedbackTest {
     @BeforeEach
     void setUp() {
         service = mock(ReservationService.class);
-        mvc = MockMvcBuilders.standaloneSetup(new ReservationController(service, mock(MeetingRoomService.class), mock(AccessService.class), mock(RoomBoardService.class), mock(RuleConfigService.class)))
+        mvc = MockMvcBuilders.standaloneSetup(new ReservationController(service, mock(MeetingRoomService.class), mock(AccessService.class), mock(RoomBoardService.class), mock(RuleConfigService.class), new com.wyc.demo03.config.SlotProperties(), new com.wyc.demo03.config.DoorProperties()))
                 .setViewResolvers(new InternalResourceViewResolver("/WEB-INF/views/", ".html")).build();
     }
 
