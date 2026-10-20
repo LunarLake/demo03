@@ -174,7 +174,7 @@ public class ReservationServiceImpl extends ServiceImpl<ReservationMapper, Reser
                 // 先落库拿到 ID，再占位；占用失败会抛异常把这条记录一起回滚
                 slotService.occupy(r.getId(), r.getRoomId(), units);
                 String code = checkinCodeService.issue(r.getId());
-                notifySnapshot(r, ReservationStatus.APPROVED);
+                refreshScreen(r);
                 audit("STUDENT", AuditLog.Action.RESERVE, r.getId(),
                         "自动通过：" + outcome.firstRuleCode());
                 return SubmitResult.ok(r.getId(), ReservationStatus.APPROVED, outcome.message(), code);
@@ -233,7 +233,7 @@ public class ReservationServiceImpl extends ServiceImpl<ReservationMapper, Reser
         save(r);
         slotService.occupy(r.getId(), r.getRoomId(), units);
         String code = checkinCodeService.issue(r.getId());
-        notifySnapshot(r, ReservationStatus.APPROVED);
+        refreshScreen(r);
         audit("TEACHER", AuditLog.Action.RESERVE, r.getId(),
                 owners.isEmpty() ? "教师预约直接通过" : "教师覆盖 " + owners.size() + " 笔预约");
         return SubmitResult.ok(r.getId(), ReservationStatus.APPROVED, "预约已生效", code);
@@ -269,7 +269,7 @@ public class ReservationServiceImpl extends ServiceImpl<ReservationMapper, Reser
         slotService.occupy(id, r.getRoomId(), units);
 
         String code = checkinCodeService.issue(id);
-        notifySnapshot(r, ReservationStatus.APPROVED);
+        refreshScreen(r);
         audit("ADMIN", AuditLog.Action.APPROVE, id, "人工批准，签到码已签发");
         return ApproveResult.ok(code);
     }
@@ -329,7 +329,7 @@ public class ReservationServiceImpl extends ServiceImpl<ReservationMapper, Reser
         baseMapper.setCancelSource(reservationId, "USER");
         slotService.release(reservationId);
         checkinCodeService.revoke(reservationId);
-        notifySnapshot(r, ReservationStatus.CANCELED);
+        refreshScreen(r);
         audit("USER", AuditLog.Action.CANCEL, reservationId, "用户取消");
         return "success";
     }
@@ -395,7 +395,7 @@ public class ReservationServiceImpl extends ServiceImpl<ReservationMapper, Reser
         attendanceRecordService.save(record);
 
         audit("USER", AuditLog.Action.CHECKIN, reservationId, "首次签到成功");
-        notifySnapshot(r, ReservationStatus.CHECKED_IN);
+        refreshScreen(r);
         // ★ 开机指令不在这里下发（BUG-004）：本方法处于事务中，若此时发布设备指令，
         //   可能出现"设备已经开锁、签到随后回滚"的不可逆错误。
         //   由控制器在本事务提交之后调用 AccessService.openAfterCheckIn()。
@@ -438,7 +438,7 @@ public class ReservationServiceImpl extends ServiceImpl<ReservationMapper, Reser
             }
             slotService.release(r.getId());
             checkinCodeService.revoke(r.getId());
-            notifySnapshot(r, ReservationStatus.TIMEOUT_RELEASED);
+            refreshScreen(r);
             // 爽约扣分：同一预约同一原因由信用流水的唯一键兜底，重复扫描不会扣两次
             creditService.adjust(r.getUserId(), CreditLog.Reason.NO_SHOW, null,
                     r.getId(), null, "SYSTEM", "签到截止未签到");
@@ -465,7 +465,7 @@ public class ReservationServiceImpl extends ServiceImpl<ReservationMapper, Reser
             }
             slotService.release(r.getId());
             checkinCodeService.revoke(r.getId());
-            notifySnapshot(r, ReservationStatus.FINISHED);
+            refreshScreen(r);
             // 只有"已签到"才算按时到场：未签到的会被 releaseNoShow 先处理掉，走不到这里
             if (from == ReservationStatus.CHECKED_IN) {
                 creditService.adjust(r.getUserId(), CreditLog.Reason.ON_TIME_CHECKIN, null,
@@ -529,12 +529,19 @@ public class ReservationServiceImpl extends ServiceImpl<ReservationMapper, Reser
     /**
      * 同步设备屏幕。失败只记日志 —— 屏幕不更新不是业务失败，
      * 绝不能让一次 MQTT 抖动把刚批准的预约回滚掉。
+     *
+     * <p><b>传房间而不是传预约</b>（BUG-002）：事件里的这笔预约未必是此刻该上屏的那笔。
+     * 例如 A 正在使用房间时批准三天后的 B，屏幕必须继续显示 A，否则 A 再次开门会被
+     * 设备以 {@code ERR_BIND} 拒绝。该显示什么由 {@link DeviceNotifier} 按当前时刻重算。
      */
-    private void notifySnapshot(Reservation r, ReservationStatus status) {
+    private void refreshScreen(Reservation r) {
+        if (r == null || r.getRoomId() == null) {
+            return;
+        }
         try {
-            deviceNotifier.snapshot(r, status);
+            deviceNotifier.refresh(r.getRoomId());
         } catch (RuntimeException e) {
-            log.warn("设备屏幕同步失败：reservation={} status={}", r == null ? null : r.getId(), status, e);
+            log.warn("设备屏幕同步失败：reservation={} room={}", r.getId(), r.getRoomId(), e);
         }
     }
 

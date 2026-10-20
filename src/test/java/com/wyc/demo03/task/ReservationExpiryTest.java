@@ -19,6 +19,7 @@ import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -96,6 +97,23 @@ class ReservationExpiryTest {
         scheduler.converge();
 
         verify(deviceNotifier).remind(r);
+    }
+
+    @Test
+    @DisplayName("每轮收敛都刷新全部房间的屏幕：窗口切换不是事件，没有兜底屏幕不会翻页（BUG-002）")
+    void convergeRefreshesScreens() {
+        scheduler.converge();
+
+        verify(deviceNotifier).refreshAll();
+    }
+
+    @Test
+    @DisplayName("屏幕刷新失败不能拖垮整轮收敛")
+    void screenRefreshFailureIsIsolated() {
+        doThrow(new IllegalStateException("mqtt down")).when(deviceNotifier).refreshAll();
+
+        assertDoesNotThrow(() -> scheduler.converge());
+        verify(reservationService).releaseNoShow(T0);
     }
 
     @Test

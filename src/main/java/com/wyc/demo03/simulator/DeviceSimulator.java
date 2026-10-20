@@ -64,6 +64,9 @@ public class DeviceSimulator {
     /** 当前屏幕上显示的预约（来自 snapshot），用于"跨预约指令不得执行"的绑定校验。 */
     private volatile Long displayedReservationId;
 
+    /** 最近一次快照的载荷，供测试断言"码只在签到窗口内上屏"（BUG-002）。 */
+    private volatile String lastSnapshotPayload;
+
     @EventListener(ApplicationReadyEvent.class)
     public void start() {
         gateway.subscribe(MqttTopics.cmd(properties.getDeviceCode()), mqttProperties.getQos(), this::onCommand);
@@ -82,6 +85,7 @@ public class DeviceSimulator {
             return;
         }
         displayedReservationId = envelope.getReservationId();
+        lastSnapshotPayload = envelope.getPayload();
         String screen = "[SCREEN] " + (envelope.getPayload() == null ? "空闲" : envelope.getPayload());
         System.out.println(screen);
         writeScreen(screen);
@@ -265,6 +269,11 @@ public class DeviceSimulator {
     // 供测试观察
     public Long displayedReservationId() {
         return displayedReservationId;
+    }
+
+    /** 最近一次收到的屏幕快照载荷（{@code k=v;k=v}），未收到过则为 {@code null}。 */
+    public String lastSnapshotPayload() {
+        return lastSnapshotPayload;
     }
 
     public int seenMsgCount() {

@@ -24,6 +24,7 @@ import java.util.List;
  *   <li>已通过但签到截止（开始后 5 分钟）仍未签到 → 超时释放</li>
  *   <li>到达结束时刻 → 已结束</li>
  *   <li>结束前 5 分钟 → 登记提醒（P5 接设备后在此下发屏幕/蜂鸣）</li>
+ *   <li>刷新全部房间的屏幕快照（窗口切换不是事件，没有它屏幕不会翻页，见 BUG-002）</li>
  * </ol>
  *
  * <p>扫描存在最多一个周期（约 60 秒）的正常延迟。因此<b>授权判定不依赖定时任务是否已跑</b>：
@@ -49,6 +50,9 @@ public class ReservationScheduler {
             int finished = reservationService.finishExpired(now);
             List<Reservation> reminded = reservationService.remindEnding(now);
             int pushed = pushReminders(reminded);
+            // 屏幕按"当前时刻"翻页：上一场结束、下一场开始、进入/离开签到窗口
+            // 都不对应任何一笔业务事件，只能靠这一轮兜底（BUG-002）
+            deviceNotifier.refreshAll();
             // 超时未回执的开门指令置 EXPIRED：过期指令不得再被执行
             int expired = deviceCommandService.expireOverdue(now);
 

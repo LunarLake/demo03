@@ -139,6 +139,20 @@ public interface ReservationMapper extends BaseMapper<Reservation> {
     List<Reservation> findEndingSoon(@Param("now") LocalDateTime now,
                                      @Param("until") LocalDateTime until);
 
+    /**
+     * 房间<b>当前这一时刻</b>正在生效的预约（BUG-002 的核心查询）。
+     *
+     * <p>口径：有效占用状态（已通过 / 已签到）且 {@code now ∈ [start_time, end_time)}。
+     * 未来的预约不算 —— 屏幕绑到未来预约会让正在使用房间的人开不了门。
+     *
+     * <p>正常情况最多一笔（单元唯一键保证）。若历史脏数据出现多笔，取开始最早的。
+     */
+    @Select("SELECT * FROM t_reservation "
+            + "WHERE room_id = #{roomId} AND reservation_status IN (1, 6) "
+            + "  AND start_time <= #{now} AND end_time > #{now} "
+            + "ORDER BY start_time LIMIT 1")
+    Reservation findCurrentForRoom(@Param("roomId") Long roomId, @Param("now") LocalDateTime now);
+
     // ====================================================================
     // 查询 / 统计
     // ====================================================================

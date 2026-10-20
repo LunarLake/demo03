@@ -25,6 +25,7 @@ import java.time.LocalDateTime;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -57,6 +58,7 @@ class MqttAccessIntegrationTest {
     @Autowired private AccessLogMapper accessLogMapper;
     @Autowired private UserService userService;
     @Autowired private com.wyc.demo03.simulator.DeviceSimulator simulator;
+    @Autowired private com.wyc.demo03.device.DeviceNotifier deviceNotifier;
 
     private User student;
 
@@ -118,11 +120,98 @@ class MqttAccessIntegrationTest {
         assertEquals(1, logs.get(0).getGranted());
     }
 
+    // ====================================================================
+    // 屏幕绑定（BUG-002）
+    //
+    // 旧行为是"哪笔预约触发事件就上屏哪笔"，于是批准未来预约会抢走正在使用
+    // 房间的那笔的屏幕绑定，当事人再次开门被设备拒为 ERR_BIND。
+    // 下面四条把这四类场景钉死。
+    // ====================================================================
+
     @Test
-    @DisplayName("批准 → 屏幕显示：自动通过后设备会收到快照并绑定当前预约")
-    void approvalPushesSnapshotToScreen() {
-        // 明天 10:00–11:00，人数 3、信用 100 → 自动通过
-        LocalDateTime start = java.time.LocalDate.now().plusDays(3).atTime(10, 0);
+    @DisplayName("批准未来预约不会抢走当前预约的屏幕绑定，A 仍可再次开门")
+    void futureApprovalDoesNotStealScreen() {
+        Reservation a = insertApprovedNow();
+        reservationService.checkIn(a.getId(), student.getId(), "4321", "127.0.0.1");
+        assertEquals(a.getId(), simulator.displayedReservationId(), "签到后屏幕应绑定 A");
+
+        // 批准同房间明天上午的 B（自动通过）
+        Reservation b = insertFutureApproved();
+        assertNotNull(b.getId());
+
+        assertEquals(a.getId(), simulator.displayedReservationId(),
+                "批准未来预约不得改写屏幕：A 正在使用房间");
+
+        var again = accessService.reopen(a.getId(), student.getId(), "127.0.0.1");
+        assertTrue(again.granted(), "A 仍在使用房间，应当授权");
+        assertTrue(again.acknowledged(), "指令所属预约与屏幕绑定一致，不得被 ERR_BIND 拒绝");
+    }
+
+    @Test
+    @DisplayName("取消未来预约也不会清掉当前预约的屏幕绑定")
+    void cancelFutureReservationKeepsScreen() {
+        Reservation a = insertApprovedNow();
+        reservationService.checkIn(a.getId(), student.getId(), "4321", "127.0.0.1");
+        Reservation b = insertFutureApproved();
+
+        assertEquals("success", reservationService.cancel(b.getId(), student.getId()));
+
+        assertEquals(a.getId(), simulator.displayedReservationId(),
+                "取消的是未来的 B，屏幕上仍应是正在进行的 A");
+    }
+
+    @Test
+    @DisplayName("窗口切换后屏幕自动翻到下一笔（上一场结束、下一场开始）")
+    void screenSwitchesWhenWindowChanges() {
+        LocalDateTime now = LocalDateTime.now().withSecond(0).withNano(0);
+        Reservation a = insertApprovedAt(now.minusMinutes(10), 30, "1111");
+        Reservation b = insertFutureApproved();
+        deviceNotifier.refresh(1L);
+        assertEquals(a.getId(), simulator.displayedReservationId(), "B 还没开始，屏幕是 A");
+
+        // 模拟时间推进：A 已结束、B 正在进行（窗口切换不是事件，靠收敛任务兜底）
+        a.setEndTime(now.minusMinutes(1));
+        reservationMapper.updateById(a);
+        b.setStartTime(now.minusMinutes(1));
+        b.setEndTime(now.plusMinutes(59));
+        reservationMapper.updateById(b);
+
+        deviceNotifier.refresh(1L);
+
+        assertEquals(b.getId(), simulator.displayedReservationId(), "A 结束后屏幕应翻到 B");
+    }
+
+    @Test
+    @DisplayName("签到码只在当前有效的签到窗口内上屏")
+    void codeOnlyShownDuringCheckinWindow() {
+        LocalDateTime now = LocalDateTime.now().withSecond(0).withNano(0);
+        // 已开始 10 分钟 > 5 分钟窗口：码不该再挂着
+        Reservation r = insertApprovedAt(now.minusMinutes(10), 45, "1111");
+        deviceNotifier.refresh(1L);
+
+        assertEquals(r.getId(), simulator.displayedReservationId());
+        String payload = simulator.lastSnapshotPayload();
+        assertNotNull(payload);
+        assertFalse(payload.contains("code="), "窗口已过，码不得继续上屏：payload=" + payload);
+        assertTrue(payload.contains("endsAt="), "设备要能自己算倒计时");
+
+        // 把开始时刻挪到 1 分钟前 → 落回窗口内
+        r.setStartTime(now.minusMinutes(1));
+        r.setEndTime(now.plusMinutes(44));
+        reservationMapper.updateById(r);
+        deviceNotifier.refresh(1L);
+
+        assertTrue(simulator.lastSnapshotPayload().contains("code=1111"),
+                "窗口内应能看到码：payload=" + simulator.lastSnapshotPayload());
+    }
+
+    /**
+     * 经真实审批链路插一笔未来预约（明天上午，对齐 15 分钟且在 08:00–22:00 内）。
+     *
+     * <p>不能直接插"三小时后"：本地时间晚于 19:00 时那已经超出开放时段，规则会拒绝。
+     */
+    private Reservation insertFutureApproved() {
+        LocalDateTime start = LocalDateTime.now().plusDays(1).toLocalDate().atTime(9, 0);
         Reservation form = new Reservation();
         form.setRoomId(1L);
         form.setStartTime(start);
@@ -130,10 +219,28 @@ class MqttAccessIntegrationTest {
         form.setAttendeeCount(3);
 
         var result = reservationService.submit(form, student.getId(), "STUDENT");
+        assertEquals(com.wyc.demo03.domain.ReservationStatus.APPROVED, result.status(),
+                "信用 100、人数 3 应自动通过");
+        return reservationMapper.selectById(result.reservationId());
+    }
 
-        assertEquals(com.wyc.demo03.domain.ReservationStatus.APPROVED, result.status());
-        assertEquals(result.reservationId(), simulator.displayedReservationId(),
-                "批准后屏幕应显示这笔预约（设备端据此做跨预约开锁校验）");
+    /** 插一笔指定开始时刻、已通过且已发码的预约。 */
+    private Reservation insertApprovedAt(LocalDateTime start, int durationMinutes, String code) {
+        Reservation r = new Reservation();
+        r.setUserId(student.getId());
+        r.setRoomId(1L);
+        r.setStartTime(start);
+        r.setEndTime(start.plusMinutes(durationMinutes));
+        r.setAttendeeCount(2);
+        r.setReservationStatus(ReservationStatus.APPROVED.code());
+        reservationMapper.insert(r);
+
+        CheckinCode cc = new CheckinCode();
+        cc.setReservationId(r.getId());
+        cc.setCode(code);
+        cc.setIssuedAt(LocalDateTime.now());
+        checkinCodeMapper.insert(cc);
+        return r;
     }
 
     @Test

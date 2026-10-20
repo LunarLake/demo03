@@ -20,6 +20,10 @@ public interface DeviceMapper extends BaseMapper<Device> {
     @Select("SELECT * FROM t_device WHERE room_id = #{roomId} LIMIT 1")
     Device findByRoomId(@Param("roomId") Long roomId);
 
+    /** 已绑定房间的设备：屏幕需要按房间刷新，未绑房间的设备无从刷新。 */
+    @Select("SELECT * FROM t_device WHERE room_id IS NOT NULL")
+    List<Device> findBound();
+
     /** 心跳：更新时刻并置在线。 */
     @Update("UPDATE t_device SET last_heartbeat_at = #{at}, online = 1 WHERE device_code = #{deviceCode}")
     int touchHeartbeat(@Param("deviceCode") String deviceCode, @Param("at") LocalDateTime at);
