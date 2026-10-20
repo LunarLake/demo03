@@ -1,6 +1,7 @@
 package com.wyc.demo03.task;
 
 import com.wyc.demo03.entity.Reservation;
+import com.wyc.demo03.service.CreditService;
 import com.wyc.demo03.service.ReservationService;
 import com.wyc.demo03.support.MutableClock;
 import org.junit.jupiter.api.BeforeEach;
@@ -34,13 +35,15 @@ class ReservationExpiryTest {
 
     @Mock
     private ReservationService reservationService;
+    @Mock
+    private CreditService creditService;
 
     private final MutableClock clock = MutableClock.at(T0);
     private ReservationScheduler scheduler;
 
     @BeforeEach
     void setUp() {
-        scheduler = new ReservationScheduler(reservationService, clock);
+        scheduler = new ReservationScheduler(reservationService, creditService, clock);
     }
 
     @Test
@@ -74,5 +77,25 @@ class ReservationExpiryTest {
 
         assertDoesNotThrow(() -> scheduler.converge());
         verify(reservationService).remindEnding(T0);
+    }
+
+    @Test
+    @DisplayName("「30 日无爽约」加分是独立的每日任务，不混在每分钟的收敛里")
+    void cleanRecordIsSeparateDailyJob() {
+        when(creditService.awardCleanRecord(T0)).thenReturn(2);
+
+        scheduler.awardCleanRecords();
+
+        verify(creditService).awardCleanRecord(T0);
+        // 每分钟的收敛不应触发加分
+        scheduler.converge();
+        verify(creditService, org.mockito.Mockito.times(1)).awardCleanRecord(T0);
+    }
+
+    @Test
+    @DisplayName("加分任务异常也不影响调度线程")
+    void cleanRecordFailureIsSwallowed() {
+        when(creditService.awardCleanRecord(T0)).thenThrow(new IllegalStateException("boom"));
+        assertDoesNotThrow(() -> scheduler.awardCleanRecords());
     }
 }

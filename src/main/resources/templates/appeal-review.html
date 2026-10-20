@@ -1,0 +1,140 @@
+<!doctype html>
+<html xmlns:th="http://www.thymeleaf.org">
+  <head>
+    <th:block th:replace="~{fragments/common-head :: head('申诉复核')}"></th:block>
+  </head>
+  <body class="d-flex">
+    <th:block th:replace="~{fragments/sidebar :: sidebar}"></th:block>
+    <main class="content-area flex-grow-1">
+      <th:block th:replace="~{fragments/header :: header('申诉复核')}"></th:block>
+      <section class="container-fluid py-4 px-3 px-md-4">
+        <div
+          th:if="${info != null}"
+          class="alert alert-dismissible fade show"
+          th:classappend="'alert-' + ${infoType != null ? infoType : 'info'}"
+          role="alert"
+        >
+          <span th:text="${info}"></span>
+          <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+        </div>
+
+        <div
+          th:if="${overdue > 0}"
+          class="alert alert-danger"
+          th:text="'有 ' + ${overdue} + ' 件工单已超过应办结时间，请尽快处理'"
+        ></div>
+
+        <div class="alert alert-light border small">
+          <b>复核规则：</b>复核人不得是申请人本人，也不得是原审核人（系统会拦）。
+          申诉成立只撤销信用扣分，<b>不会恢复已释放的时段</b>。
+        </div>
+
+        <div class="card summary-card">
+          <div class="card-header bg-white border-0">
+            <h2 class="h5 mb-0">待复核</h2>
+          </div>
+          <div class="card-body p-0">
+            <div class="table-responsive">
+              <table class="table table-sm mb-0 align-middle">
+                <thead>
+                  <tr>
+                    <th>提交</th>
+                    <th>申请人</th>
+                    <th>对象</th>
+                    <th>申诉说明</th>
+                    <th>原处理依据</th>
+                    <th>应办结</th>
+                    <th style="min-width: 260px">复核</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr th:each="a : ${pending}">
+                    <td
+                      class="small text-nowrap"
+                      th:text="${#temporals.format(a['created_at'], 'MM-dd HH:mm')}"
+                    ></td>
+                    <td class="small" th:text="${a['applicantName']}"></td>
+                    <td class="small">
+                      <span th:text="${a['target_type'] == 'CREDIT'} ? '信用扣分' : '预约'"></span>
+                      <span class="text-muted" th:text="'#' + ${a['target_id']}"></span>
+                    </td>
+                    <td class="small" th:text="${a['reason']}"></td>
+                    <td class="small text-muted" th:text="${a['original_decision']}"></td>
+                    <td class="small text-nowrap" th:text="${#temporals.format(a['due_at'], 'MM-dd HH:mm')}"></td>
+                    <td>
+                      <form
+                        th:action="@{/appeal/decide}"
+                        method="post"
+                        class="d-flex gap-1 flex-wrap"
+                      >
+                        <input type="hidden" name="_csrf" th:value="${_csrf}" />
+                        <input type="hidden" name="id" th:value="${a['id']}" />
+                        <select name="status" class="form-select form-select-sm" style="width: 110px">
+                          <option value="UPHELD">维持原判</option>
+                          <option value="REVOKED">申诉成立</option>
+                          <option value="PARTIAL">部分成立</option>
+                        </select>
+                        <input
+                          type="text"
+                          name="note"
+                          class="form-control form-control-sm"
+                          style="width: 120px"
+                          placeholder="意见"
+                          maxlength="500"
+                        />
+                        <button class="btn btn-sm btn-primary" type="submit">提交</button>
+                      </form>
+                    </td>
+                  </tr>
+                  <tr th:if="${#lists.isEmpty(pending)}">
+                    <td colspan="7" class="text-center text-muted py-4">没有待复核工单</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+        <div class="card summary-card mt-3">
+          <div class="card-header bg-white border-0">
+            <h2 class="h5 mb-0">已办结</h2>
+          </div>
+          <div class="card-body p-0">
+            <div class="table-responsive">
+              <table class="table table-sm mb-0 align-middle">
+                <thead>
+                  <tr>
+                    <th>办结</th>
+                    <th>申请人</th>
+                    <th>对象</th>
+                    <th>结论</th>
+                    <th>复核人</th>
+                    <th>意见</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr th:each="a : ${decided}">
+                    <td class="small text-nowrap" th:text="${#temporals.format(a['decided_at'], 'MM-dd HH:mm')}"></td>
+                    <td class="small" th:text="${a['applicantName']}"></td>
+                    <td class="small" th:text="${a['target_type']} + ' #' + ${a['target_id']}"></td>
+                    <td>
+                      <span th:if="${a['status'] == 'UPHELD'}" class="badge bg-secondary">维持原判</span>
+                      <span th:if="${a['status'] == 'REVOKED'}" class="badge bg-success">申诉成立</span>
+                      <span th:if="${a['status'] == 'PARTIAL'}" class="badge bg-info">部分成立</span>
+                    </td>
+                    <td class="small" th:text="${a['reviewerName']}"></td>
+                    <td class="small text-muted" th:text="${a['review_note']}"></td>
+                  </tr>
+                  <tr th:if="${#lists.isEmpty(decided)}">
+                    <td colspan="6" class="text-center text-muted py-4">暂无已办结工单</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </section>
+    </main>
+    <th:block th:replace="~{fragments/common-scripts :: scripts}"></th:block>
+  </body>
+</html>

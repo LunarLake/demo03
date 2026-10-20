@@ -227,6 +227,34 @@ public class ReservationController {
         return "reservation-detail";
     }
 
+    /**
+     * 管理员手工认定扣分（一期无传感器的补偿手段，见计划 Q1）。
+     *
+     * @param type OVERTIME=超时占用（−5），VIOLATION=违规使用（−20）
+     */
+    @PostMapping("/reservation/penalty")
+    public String penalty(@RequestParam Long id,
+                          @RequestParam String type,
+                          @RequestParam(required = false) String note,
+                          HttpSession session,
+                          RedirectAttributes ra) {
+        Long adminId = (Long) session.getAttribute("Id");
+        try {
+            if ("OVERTIME".equals(type)) {
+                reservationService.markOvertimeOccupancy(id, adminId, note);
+            } else if ("VIOLATION".equals(type)) {
+                reservationService.markViolation(id, adminId, note);
+            } else {
+                throw new IllegalArgumentException("未知的认定类型：" + type);
+            }
+            ra.addFlashAttribute("info", "已记录认定并写入信用流水");
+            ra.addFlashAttribute("infoType", "success");
+        } catch (IllegalArgumentException | IllegalStateException ex) {
+            return fail(ra, ex.getMessage(), "/reservation/detail/" + id);
+        }
+        return "redirect:/reservation/detail/" + id;
+    }
+
     private String fail(RedirectAttributes ra, String message, String location) {
         ra.addFlashAttribute("info", message);
         ra.addFlashAttribute("infoType", "danger");

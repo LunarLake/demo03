@@ -178,6 +178,13 @@
                         取消
                       </button>
                     </form>
+                    <a
+                      th:if="${r['reservation_status'] == 2 or r['reservation_status'] == 3 or r['reservation_status'] == 5}"
+                      th:href="@{/appeal/new(type='RESERVATION', targetId=${r.id})}"
+                      class="btn btn-sm btn-outline-secondary"
+                    >
+                      申诉
+                    </a>
                   </td>
                 </tr>
               </tbody>

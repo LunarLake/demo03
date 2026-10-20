@@ -43,12 +43,14 @@ public class WebConfig implements WebMvcConfigurer {
                         "/**/*.css", "/**/*.js", "/**/*.jpg", "/**/*.png", "/**/*.gif", "/**/*.ico"
                 );
 
-        // 管理员：会议室管理 + 审批管理 + 控制台总览 + 系统日志
+        // 管理员：会议室管理 + 审批管理 + 控制台总览 + 系统日志 + 规则配置 + 申诉复核
         registry.addInterceptor(adminInterceptor)
                 .addPathPatterns(
                         "/room/add", "/room/update", "/room/delete/**",
                         "/reservation/approve", "/reservation/approve-list",
                         "/reservation/reject", "/reservation/detail/**",
+                        "/reservation/penalty",
+                        "/appeal/review", "/appeal/decide",
                         "/admin/**",
                         "/api/report-*"
                 );

@@ -57,6 +57,37 @@
                 </div>
             </div>
         </div>
+        <div class="card summary-card mb-3">
+            <div class="card-header bg-white border-0"><h2 class="h5 mb-0">人工认定（写入信用流水）</h2></div>
+            <div class="card-body">
+                <p class="small text-muted">
+                    一期没有人体感应也不做签退，「超时占用」与「违规使用」只能由管理员现场认定。
+                    每项认定对同一预约只能记一次，30 日内同类问题再犯会自动加倍。
+                </p>
+                <form th:action="@{/reservation/penalty}" method="post" class="d-flex gap-2 flex-wrap align-items-center mb-2">
+                    <input type="hidden" name="_csrf" th:value="${_csrf}" />
+                    <input type="hidden" name="id" th:value="${detail['id']}" />
+                    <input type="hidden" name="type" value="OVERTIME" />
+                    <input type="text" name="note" class="form-control form-control-sm" style="max-width: 320px"
+                           maxlength="200" placeholder="认定说明（选填）" />
+                    <button type="submit" class="btn btn-sm btn-outline-warning"
+                            onclick="return confirm('确认认定「超时占用」，扣 5 分？');">
+                        认定超时占用（−5）
+                    </button>
+                </form>
+                <form th:action="@{/reservation/penalty}" method="post" class="d-flex gap-2 flex-wrap align-items-center">
+                    <input type="hidden" name="_csrf" th:value="${_csrf}" />
+                    <input type="hidden" name="id" th:value="${detail['id']}" />
+                    <input type="hidden" name="type" value="VIOLATION" />
+                    <input type="text" name="note" class="form-control form-control-sm" style="max-width: 320px"
+                           maxlength="200" placeholder="违规事实说明（建议填写）" />
+                    <button type="submit" class="btn btn-sm btn-outline-danger"
+                            onclick="return confirm('确认认定「违规使用」，扣 20 分？');">
+                        认定违规使用（−20）
+                    </button>
+                </form>
+            </div>
+        </div>
         <a href="/reservation/approve-list" class="btn btn-outline-secondary">返回审批列表</a>
     </section>
 </main>

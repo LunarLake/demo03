@@ -1,0 +1,124 @@
+<!doctype html>
+<html xmlns:th="http://www.thymeleaf.org">
+  <head>
+    <th:block th:replace="~{fragments/common-head :: head('我的信用分')}"></th:block>
+  </head>
+  <body class="d-flex">
+    <th:block th:replace="~{fragments/sidebar :: sidebar}"></th:block>
+    <main class="content-area flex-grow-1">
+      <th:block th:replace="~{fragments/header :: header('我的信用分')}"></th:block>
+      <section class="container-fluid py-4 px-3 px-md-4">
+        <div
+          th:if="${info != null}"
+          class="alert alert-dismissible fade show"
+          th:classappend="'alert-' + ${infoType != null ? infoType : 'info'}"
+          role="alert"
+        >
+          <span th:text="${info}"></span>
+          <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+        </div>
+
+        <div class="row g-3">
+          <div class="col-12 col-lg-4">
+            <div class="card summary-card h-100">
+              <div class="card-body text-center py-4">
+                <div class="text-muted">当前信用分</div>
+                <div class="display-3 fw-bold" th:text="${account.score}">100</div>
+                <div
+                  class="small text-muted"
+                  th:text="'更新于 ' + ${#temporals.format(account.updatedAt, 'yyyy-MM-dd HH:mm')}"
+                ></div>
+                <a th:href="@{/appeal}" class="btn btn-sm btn-outline-secondary mt-3"
+                  >对扣分有异议？提交申诉</a
+                >
+              </div>
+            </div>
+          </div>
+          <div class="col-12 col-lg-8">
+            <div class="card summary-card h-100">
+              <div class="card-header bg-white border-0">
+                <h2 class="h5 mb-0">这些分数意味着什么</h2>
+              </div>
+              <div class="card-body">
+                <ul class="mb-0 small">
+                  <li>
+                    <b th:text="${autoCredit}">90</b> 分及以上：满足基础规则即可
+                    <span class="text-success">自动通过</span>
+                  </li>
+                  <li>
+                    <b th:text="${midCredit}">70</b>–<b th:text="${autoCredit - 1}">89</b>
+                    分：只有 <b>2 小时以内</b>的申请可自动通过，更长的转人工
+                  </li>
+                  <li>
+                    低于 <b th:text="${midCredit}">70</b> 分：必须填写用途说明并转人工审核
+                  </li>
+                  <li class="text-danger">
+                    低于 <b th:text="${baseCredit}">60</b> 分：无法预约，可对扣分提交申诉
+                  </li>
+                </ul>
+                <hr />
+                <div class="small text-muted">
+                  加分项只有两条：按时签到并正常结束 +2 分；30 日内无爽约 +5 分。
+                  其余都是扣分，且 30 日内同类问题再犯会加倍。
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="card summary-card mt-3">
+          <div class="card-header bg-white border-0">
+            <h2 class="h5 mb-0">信用流水</h2>
+          </div>
+          <div class="card-body p-0">
+            <div class="table-responsive">
+              <table class="table table-sm table-hover mb-0 align-middle">
+                <thead>
+                  <tr>
+                    <th>时间</th>
+                    <th>原因</th>
+                    <th>变动</th>
+                    <th>关联房间</th>
+                    <th>操作者</th>
+                    <th>说明</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr th:each="l : ${logs}">
+                    <td
+                      class="text-nowrap small"
+                      th:text="${#temporals.format(l['created_at'], 'MM-dd HH:mm')}"
+                    ></td>
+                    <td class="small" th:text="${l['reason_code']}"></td>
+                    <td>
+                      <span
+                        th:if="${l['delta'] > 0}"
+                        class="badge bg-success"
+                        th:text="'+' + ${l['delta']}"
+                        >+2</span
+                      >
+                      <span
+                        th:if="${l['delta'] < 0}"
+                        class="badge bg-danger"
+                        th:text="${l['delta']}"
+                        >-10</span
+                      >
+                      <span th:if="${l['delta'] == 0}" class="badge bg-secondary">0</span>
+                    </td>
+                    <td class="small" th:text="${l['roomName'] != null ? l['roomName'] : '—'}"></td>
+                    <td class="small" th:text="${l['operator']}"></td>
+                    <td class="small text-muted" th:text="${l['note']}"></td>
+                  </tr>
+                  <tr th:if="${#lists.isEmpty(logs)}">
+                    <td colspan="6" class="text-center text-muted py-4">暂无信用记录</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </section>
+    </main>
+    <th:block th:replace="~{fragments/common-scripts :: scripts}"></th:block>
+  </body>
+</html>

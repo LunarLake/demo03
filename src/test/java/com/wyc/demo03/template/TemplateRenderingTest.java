@@ -1,6 +1,11 @@
 package com.wyc.demo03.template;
 
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
+import com.wyc.demo03.entity.CreditAccount;
+import com.wyc.demo03.entity.CreditLog;
+import com.wyc.demo03.entity.RuleVersion;
+import com.wyc.demo03.service.RuleConfigService;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.mock.web.MockHttpServletRequest;
 import org.springframework.mock.web.MockHttpServletResponse;
@@ -11,10 +16,12 @@ import org.thymeleaf.templateresolver.ClassLoaderTemplateResolver;
 import org.thymeleaf.web.IWebExchange;
 import org.thymeleaf.web.servlet.JakartaServletWebApplication;
 
+import java.time.LocalDateTime;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -116,5 +123,102 @@ class TemplateRenderingTest {
         assertTrue(html.contains("selectionMessage"), "需要可感知的选择状态提示区域");
         assertTrue(html.contains("待审批占用"), "图例必须说明待审批占用");
         assertTrue(html.contains("管理员预约"), "图例不能把管理员预约并入学生颜色");
+    }
+
+    // ==================== P3 新增页面 ====================
+
+    @Test
+    @DisplayName("信用页：分数、三档阈值说明、流水行都要渲染出来")
+    void creditPageRendersScoreAndRows() {
+        CreditAccount account = new CreditAccount();
+        account.setUserId(7L);
+        account.setScore(88);
+        account.setUpdatedAt(LocalDateTime.of(2026, 10, 20, 9, 30));
+
+        Map<String, Object> row = new HashMap<>();
+        row.put("created_at", LocalDateTime.of(2026, 10, 19, 14, 0));
+        row.put("reason_code", "NO_SHOW");
+        row.put("delta", -10);
+        row.put("operator", "SYSTEM");
+        row.put("note", "签到截止未签到");
+        row.put("roomName", "研讨室A");
+
+        String html = engine().process("credit", context("STUDENT", model(
+                "account", account, "logs", List.of(row), "reasons", CreditLog.Reason.values(),
+                "autoCredit", 90, "midCredit", 70, "baseCredit", 60, "cleanAward", 5)));
+
+        assertTrue(html.contains("88"), "分数必须显示");
+        assertTrue(html.contains("90") && html.contains("70") && html.contains("60"),
+                "三档阈值来自当前规则版本，不能写死");
+        assertTrue(html.contains("NO_SHOW"), "流水原因要显示");
+        assertTrue(html.contains("-10"), "扣分数值要显示");
+        assertFalse(html.contains("${"), "不能残留未解析的表达式");
+    }
+
+    @Test
+    @DisplayName("申诉列表：空表时给引导文案，不报错")
+    void appealListRendersEmptyState() {
+        String html = engine().process("appeal", context("STUDENT", model("appeals", List.of())));
+        assertTrue(html.contains("还没有申诉记录"));
+        assertTrue(html.contains("不会把已经释放的时段"), "必须说清申诉不恢复房间");
+    }
+
+    @Test
+    @DisplayName("申诉复核台：待办与已办结两张表都能渲染")
+    void appealReviewRendersBothTables() {
+        Map<String, Object> pending = new HashMap<>();
+        pending.put("id", 1L);
+        pending.put("target_type", "RESERVATION");
+        pending.put("target_id", 42L);
+        pending.put("reason", "时段其实是空的");
+        pending.put("original_decision", "MANUAL_REJECTED");
+        pending.put("created_at", LocalDateTime.of(2026, 10, 20, 9, 0));
+        pending.put("due_at", LocalDateTime.of(2026, 10, 23, 9, 0));
+        pending.put("applicantName", "学生一");
+
+        String html = engine().process("appeal-review", context("ADMIN", model(
+                "pending", List.of(pending), "decided", List.of(), "overdue", 1)));
+
+        assertTrue(html.contains("学生一"));
+        assertTrue(html.contains("申诉成立"), "结论下拉必须包含三种终态");
+        assertTrue(html.contains("已超过应办结时间"));
+    }
+
+    @Test
+    @DisplayName("规则配置页：8 个参数按白名单渲染，且带范围提示")
+    void ruleConfigPageRendersWhitelist() {
+        var params = java.util.Arrays.stream(com.wyc.demo03.domain.RuleParamKey.values())
+                .map(k -> new RuleConfigService.ParamView(k.name(), k.label(), k.unit(),
+                        k.min(), k.max(), k.defaultValue(), k.defaultValue(), k.description()))
+                .toList();
+
+        RuleVersion version = new RuleVersion();
+        version.setVersionNo(1);
+        version.setEffectiveFrom(LocalDateTime.of(2026, 10, 20, 9, 0));
+
+        String html = engine().process("rule-config", context("ADMIN", model(
+                "params", params, "version", version, "history", List.of())));
+
+        assertEquals(com.wyc.demo03.domain.RuleParamKey.values().length,
+                countOccurrences(html, "name=\"AUTO_APPROVE_CREDIT\"")
+                        + countOccurrences(html, "name=\"MID_CREDIT_MIN\"")
+                        + countOccurrences(html, "name=\"MID_MAX_DURATION_MINUTES\"")
+                        + countOccurrences(html, "name=\"AUTO_APPROVE_DAILY_LIMIT\"")
+                        + countOccurrences(html, "name=\"MAX_CONTINUOUS_MINUTES\"")
+                        + countOccurrences(html, "name=\"MANUAL_REVIEW_HEADCOUNT\"")
+                        + countOccurrences(html, "name=\"MANUAL_REVIEW_DUE_HOURS\"")
+                        + countOccurrences(html, "name=\"BASE_RULE_MIN_CREDIT\""));
+        assertTrue(html.contains("基础规则"), "必须说明基础规则只读");
+        assertTrue(html.contains("新版本"), "必须说明每次保存会生成新版本");
+    }
+
+    private static int countOccurrences(String text, String needle) {
+        int count = 0;
+        int idx = text.indexOf(needle);
+        while (idx >= 0) {
+            count++;
+            idx = text.indexOf(needle, idx + needle.length());
+        }
+        return count;
     }
 }

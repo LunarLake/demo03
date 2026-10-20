@@ -29,6 +29,18 @@
         </a>
       </li>
       <li class="nav-item">
+        <a class="nav-link" href="/credit">
+          <i class="bi bi-star-half" aria-hidden="true"></i>
+          <span class="menu-text">我的信用分</span>
+        </a>
+      </li>
+      <li class="nav-item">
+        <a class="nav-link" href="/appeal">
+          <i class="bi bi-chat-left-text" aria-hidden="true"></i>
+          <span class="menu-text">我的申诉</span>
+        </a>
+      </li>
+      <li class="nav-item">
         <a class="nav-link" href="/profile">
           <i class="bi bi-person" aria-hidden="true"></i>
           <span class="menu-text">个人中心</span>
@@ -38,6 +50,18 @@
         <a class="nav-link" href="/reservation/approve-list">
           <i class="bi bi-clipboard-check" aria-hidden="true"></i>
           <span class="menu-text">审批管理</span>
+        </a>
+      </li>
+      <li class="nav-item" th:if="${session.role == 'ADMIN'}">
+        <a class="nav-link" href="/appeal/review">
+          <i class="bi bi-shield-check" aria-hidden="true"></i>
+          <span class="menu-text">申诉复核</span>
+        </a>
+      </li>
+      <li class="nav-item" th:if="${session.role == 'ADMIN'}">
+        <a class="nav-link" href="/admin/rules">
+          <i class="bi bi-sliders" aria-hidden="true"></i>
+          <span class="menu-text">审核规则</span>
         </a>
       </li>
       <li class="nav-item" th:if="${session.role == 'ADMIN'}">

@@ -34,4 +34,15 @@ public interface AppealMapper extends BaseMapper<Appeal> {
     /** 超过应办结时间仍未处理的数量，用于后台告警。 */
     @Select("SELECT COUNT(*) FROM t_appeal WHERE status = 'SUBMITTED' AND due_at < #{now}")
     int countOverdue(@Param("now") LocalDateTime now);
+
+    /** 已办结工单，按办结时间倒序。 */
+    @Select("SELECT a.*, u.name AS applicantName, " +
+            "       r.start_time, r.end_time, m.room_name AS roomName, rv.name AS reviewerName " +
+            "FROM t_appeal a " +
+            "JOIN t_user u ON u.id = a.user_id " +
+            "LEFT JOIN t_reservation r ON a.target_type = 'RESERVATION' AND r.id = a.target_id " +
+            "LEFT JOIN t_meeting_room m ON m.id = r.room_id " +
+            "LEFT JOIN t_user rv ON rv.id = a.reviewer_id " +
+            "WHERE a.status <> 'SUBMITTED' ORDER BY a.decided_at DESC LIMIT 100")
+    List<Map<String, Object>> findDecided();
 }

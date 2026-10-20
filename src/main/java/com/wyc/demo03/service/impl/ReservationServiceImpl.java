@@ -14,6 +14,7 @@ import com.wyc.demo03.domain.SlotSchema;
 import com.wyc.demo03.domain.SlotUnit;
 import com.wyc.demo03.entity.AttendanceRecord;
 import com.wyc.demo03.entity.AuditLog;
+import com.wyc.demo03.entity.CreditLog;
 import com.wyc.demo03.entity.MeetingRoom;
 import com.wyc.demo03.entity.Reservation;
 import com.wyc.demo03.entity.ReservationSlot;
@@ -425,6 +426,9 @@ public class ReservationServiceImpl extends ServiceImpl<ReservationMapper, Reser
             }
             slotService.release(r.getId());
             checkinCodeService.revoke(r.getId());
+            // 爽约扣分：同一预约同一原因由信用流水的唯一键兜底，重复扫描不会扣两次
+            creditService.adjust(r.getUserId(), CreditLog.Reason.NO_SHOW, null,
+                    r.getId(), null, "SYSTEM", "签到截止未签到");
             audit("SYSTEM", AuditLog.Action.RELEASE, r.getId(), "爽约释放");
             released++;
         }
@@ -448,6 +452,11 @@ public class ReservationServiceImpl extends ServiceImpl<ReservationMapper, Reser
             }
             slotService.release(r.getId());
             checkinCodeService.revoke(r.getId());
+            // 只有"已签到"才算按时到场：未签到的会被 releaseNoShow 先处理掉，走不到这里
+            if (from == ReservationStatus.CHECKED_IN) {
+                creditService.adjust(r.getUserId(), CreditLog.Reason.ON_TIME_CHECKIN, null,
+                        r.getId(), null, "SYSTEM", "按时签到并正常结束");
+            }
             audit("SYSTEM", AuditLog.Action.RELEASE, r.getId(), "到期结束");
             finished++;
         }
@@ -466,6 +475,49 @@ public class ReservationServiceImpl extends ServiceImpl<ReservationMapper, Reser
             }
         }
         return reminded;
+    }
+
+    // ====================================================================
+    // 管理员手工认定（一期无传感器的补偿手段，见计划 Q1）
+    // ====================================================================
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public void markOvertimeOccupancy(Long reservationId, Long adminId, String note) {
+        Reservation r = getById(reservationId);
+        if (r == null) {
+            throw new IllegalArgumentException("预约不存在");
+        }
+        boolean written = creditService.adjust(r.getUserId(), CreditLog.Reason.OVERTIME_OCCUPY, null,
+                reservationId, null, actorName(adminId),
+                note == null || note.isBlank() ? "管理员认定超时占用" : note.trim());
+        if (!written) {
+            throw new IllegalStateException("该预约已认定过超时占用，不能重复扣分");
+        }
+        audit(actorName(adminId), AuditLog.Action.CREDIT_ADJUST, reservationId, "认定超时占用 −5");
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public void markViolation(Long reservationId, Long adminId, String note) {
+        Reservation r = getById(reservationId);
+        if (r == null) {
+            throw new IllegalArgumentException("预约不存在");
+        }
+        boolean written = creditService.adjust(r.getUserId(), CreditLog.Reason.VIOLATION, null,
+                reservationId, null, actorName(adminId),
+                note == null || note.isBlank() ? "管理员认定违规使用" : note.trim());
+        if (!written) {
+            throw new IllegalStateException("该预约已认定过违规，不能重复扣分");
+        }
+        audit(actorName(adminId), AuditLog.Action.CREDIT_ADJUST, reservationId, "认定违规使用 −20");
+    }
+
+    private String actorName(Long userId) {
+        if (userId == null) {
+            return "SYSTEM";
+        }
+        User user = userService.getById(userId);
+        return user == null ? String.valueOf(userId) : user.getUsername();
     }
 
     // ====================================================================

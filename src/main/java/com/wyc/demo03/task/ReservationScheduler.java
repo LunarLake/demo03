@@ -1,6 +1,7 @@
 package com.wyc.demo03.task;
 
 import com.wyc.demo03.entity.Reservation;
+import com.wyc.demo03.service.CreditService;
 import com.wyc.demo03.service.ReservationService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -32,6 +33,7 @@ import java.util.List;
 public class ReservationScheduler {
 
     private final ReservationService reservationService;
+    private final CreditService creditService;
     private final Clock clock;
 
     @Scheduled(fixedDelay = 60_000)
@@ -50,6 +52,24 @@ public class ReservationScheduler {
         } catch (RuntimeException e) {
             // 单轮失败不能终止调度：把异常吞掉并记录，下一轮会重试（所有操作都是幂等的）
             log.error("预约状态收敛失败，将在下一轮重试", e);
+        }
+    }
+
+    /**
+     * 每日 03:10 给"30 日内无爽约"的用户加 5 分。
+     *
+     * <p>单独一个调度而不是塞进每分钟的收敛：加分是低频动作，
+     * 每分钟扫一遍全体用户没有意义。幂等由信用流水自身保证（30 天内已有加分则跳过）。
+     */
+    @Scheduled(cron = "0 10 3 * * *")
+    public void awardCleanRecords() {
+        try {
+            int awarded = creditService.awardCleanRecord(LocalDateTime.now(clock));
+            if (awarded > 0) {
+                log.info("30 日无爽约加分：{} 人", awarded);
+            }
+        } catch (RuntimeException e) {
+            log.error("30 日无爽约加分失败，明日重试", e);
         }
     }
 }

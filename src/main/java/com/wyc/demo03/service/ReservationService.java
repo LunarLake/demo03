@@ -108,6 +108,17 @@ public interface ReservationService extends IService<Reservation> {
     /** 结束前提醒：登记提醒时刻并返回需要提醒的预约（P5 会下发到设备）。 */
     List<Reservation> remindEnding(LocalDateTime now);
 
+    /**
+     * 管理员手工认定"超时占用"（−5 分）。
+     *
+     * <p>一期没有人体感应也不做签退，"结束超时占用累计超过 15 分钟"无法自动判定，
+     * 只能由管理员在预约详情页认定（见计划 Q1）。认定记录写入信用流水并标注操作者。
+     */
+    void markOvertimeOccupancy(Long reservationId, Long adminId, String note);
+
+    /** 管理员认定"违规使用"（−20 分）。 */
+    void markViolation(Long reservationId, Long adminId, String note);
+
     // ==================== 查询 ====================
 
     List<Map<String, Object>> findApprovals();

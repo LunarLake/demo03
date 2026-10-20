@@ -1,0 +1,74 @@
+<!doctype html>
+<html xmlns:th="http://www.thymeleaf.org">
+  <head>
+    <th:block th:replace="~{fragments/common-head :: head('提交申诉')}"></th:block>
+  </head>
+  <body class="d-flex">
+    <th:block th:replace="~{fragments/sidebar :: sidebar}"></th:block>
+    <main class="content-area flex-grow-1">
+      <th:block th:replace="~{fragments/header :: header('提交申诉')}"></th:block>
+      <section class="container-fluid py-4 px-3 px-md-4">
+        <div class="row">
+          <div class="col-12 col-lg-7">
+            <div class="card summary-card">
+              <div class="card-header bg-white border-0">
+                <h2 class="h5 mb-0">申诉说明</h2>
+              </div>
+              <div class="card-body">
+                <form th:action="@{/appeal/submit}" method="post">
+                  <input type="hidden" name="_csrf" th:value="${_csrf}" />
+                  <input type="hidden" name="type" th:value="${type}" />
+                  <input type="hidden" name="targetId" th:value="${targetId}" />
+
+                  <div class="mb-3">
+                    <label class="form-label">申诉对象</label>
+                    <input
+                      type="text"
+                      class="form-control"
+                      disabled
+                      th:value="${type == 'CREDIT'} ? '信用扣分 #' + ${targetId} : '预约 #' + ${targetId}"
+                    />
+                  </div>
+
+                  <div class="mb-3">
+                    <label for="reason" class="form-label">情况说明（必填，500 字以内）</label>
+                    <textarea
+                      class="form-control"
+                      id="reason"
+                      name="reason"
+                      rows="6"
+                      maxlength="500"
+                      required
+                      placeholder="请说明当时的情况，以及你认为原处理有误的理由"
+                    ></textarea>
+                  </div>
+
+                  <div class="mb-3">
+                    <label for="evidence" class="form-label">凭证说明或链接（选填）</label>
+                    <input
+                      type="text"
+                      class="form-control"
+                      id="evidence"
+                      name="evidence"
+                      maxlength="500"
+                      placeholder="例如：现场照片已发辅导员 / 会议纪要链接"
+                    />
+                    <div class="form-text">一期不支持上传文件，请填写可核实的说明或链接。</div>
+                  </div>
+
+                  <div class="alert alert-light border small mb-3">
+                    每项结果只能申诉一次；受理后 3 个工作日内给出书面结论。
+                  </div>
+
+                  <button type="submit" class="btn btn-primary">提交申诉</button>
+                  <a th:href="@{/appeal}" class="btn btn-outline-secondary">返回</a>
+                </form>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+    </main>
+    <th:block th:replace="~{fragments/common-scripts :: scripts}"></th:block>
+  </body>
+</html>

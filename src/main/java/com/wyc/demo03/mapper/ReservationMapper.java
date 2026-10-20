@@ -202,4 +202,9 @@ public interface ReservationMapper extends BaseMapper<Reservation> {
             + "<foreach collection='ids' item='id' open='(' separator=',' close=')'>#{id}</foreach>"
             + "</script>")
     List<Reservation> findByIds(@Param("ids") List<Long> ids);
+
+    /** 在指定时间之后有过"已结束"预约的用户（"30 日无爽约"加分的候选集）。 */
+    @Select("SELECT DISTINCT user_id FROM t_reservation "
+            + "WHERE reservation_status = 7 AND closed_at >= #{since}")
+    List<Long> findUsersFinishedSince(@Param("since") LocalDateTime since);
 }
