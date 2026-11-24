@@ -8,7 +8,7 @@
 | 覆盖情况 | 条数 | 说明 |
 |---|---|---|
 | ✅ 自动化覆盖 | 29 | 有明确断言，回归时自动把关 |
-| ⚪ 未覆盖 | 1 | AC-28 依赖真 Broker 断连，本机无 Broker |
+| ⚪ 未覆盖 | 1 | AC-28 需硬件到场后拔网演练；Broker 与 retained 语义已在本机验证 |
 
 自动化覆盖的用例全部在 `mvn test` 内，不需要人工重复。
 
@@ -43,7 +43,7 @@
 | AC-25 | 申诉成立 | 撤销扣分，单元不恢复 | `CreditAndAppealIntegrationTest.appealRevokeRestoresScore`（分数回到 100、slot 仍为 0 条、状态仍是超时释放） | ✅ |
 | AC-26 | 篡改 MQTT 消息 HMAC | 设备丢弃 | `MqttRoundTripTest.tamperedHmacIsRejected`、`MqttEnvelopeTest.tamperAnyFieldIsDetected` | ✅ |
 | AC-27 | 伪造 `reservationId` 的开锁指令 | 设备丢弃 | `MqttRoundTripTest.boundToDisplayedReservation` | ✅ |
-| AC-28 | 断网 2 分钟后重连 | 按 snapshot 版本重绘屏幕，不执行积压指令 | 需要真实 Broker 断连 + retained 语义，**进程内总线无法模拟** | ⚪ |
+| AC-28 | 断网 2 分钟后重连 | 按 snapshot 版本重绘屏幕，不执行积压指令 | 需真实断连演练；retained 语义已在本机 Mosquitto 验证 | ⚪ |
 | AC-29 | 日志保留 | 7 天前的 `t_log` 与 `t_audit_log` 被清理 | `LogRotationJobTest.rotatesSevenDaysBack` | ✅ |
 | AC-30 | 非 ADMIN 访问规则配置 | 重定向，不泄露参数 | `WebPagesSmokeTest.nonAdminCannotOpenRuleConfig` | ✅ |
 
@@ -52,8 +52,11 @@
 ### AC-28：断网重连
 
 需要 Mosquitto 的 retained 语义与真实断连。`MqttRoundTripTest` 覆盖了 retained 参数与
-快照解析，但"断连→重连→补发"这条链路只能连真 Broker 验（见 `deploy/mosquitto/README.md` 形态 C）。
-本机未安装 Broker，未执行。
+快照解析；retained 的发布与"新订阅者立即补发"已在 2026-11-24 用本机 Mosquitto 实测通过
+（步骤见 `deploy/mosquitto/README.md` 第 2.3 节）。
+
+仍缺的是**设备侧**行为：断连期间不执行积压指令、重连后按快照重绘。这需要硬件到场后
+人为拔网演练，故仍记为未覆盖。
 
 ## 手工验收清单（依赖人/硬件，脚本无法替代）
 
