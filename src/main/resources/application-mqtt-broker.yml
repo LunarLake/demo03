@@ -1,0 +1,40 @@
+# =============================================================
+# 形态 C：真实 Broker —— 接 Mosquitto / 真机门禁
+# =============================================================
+# 启动：
+#   ./mvnw spring-boot:run -Dspring-boot.run.profiles=mqtt-broker
+#
+# local 由 application.yml 的 profile 组自动带上，不需要再写 `local,`。
+#
+# 生效后：
+#   - 门禁走 MQTT 通道（app.door.mode=mqtt），不再是"只记录不执行"
+#   - 传输用 Paho 连真实 Mosquitto（app.mqtt.mode=paho）
+#   - 设备模拟器关闭 —— 它会占用 room/{code} 的主题，开着就会和真机抢同一份
+#     心跳与回执，表现为"设备永远在线但分不清是谁在回"
+#
+# 没有真机、但想验证"真实 Broker 链路"时，用环境变量把模拟器开回来：
+#   SIMULATOR_ENABLED=true ./mvnw spring-boot:run -Dspring-boot.run.profiles=mqtt-broker
+#
+# 下面的默认值对应 deploy/mosquitto/passwd 里的演示账号，装上 Broker 即可跑通。
+# 正式部署必须用 MQTT_PASSWORD 覆盖，不要沿用这里的演示密码。
+# =============================================================
+
+app:
+  door:
+    mode: mqtt
+
+  mqtt:
+    mode: paho
+    broker-url: ${MQTT_BROKER_URL:tcp://127.0.0.1:1883}
+    client-id: ${MQTT_CLIENT_ID:demo03-backend}
+    username: ${MQTT_USERNAME:backend}
+    # 演示默认值；正式环境用 MQTT_PASSWORD 覆盖
+    password: ${MQTT_PASSWORD:change-me}
+
+  # 接真机必须关；没有真机时可设 SIMULATOR_ENABLED=true 用模拟器顶替
+  simulator:
+    enabled: ${SIMULATOR_ENABLED:false}
+
+logging:
+  level:
+    com.wyc.demo03.mqtt: INFO

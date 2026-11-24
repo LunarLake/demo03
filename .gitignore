@@ -38,6 +38,8 @@ src/main/resources/application-local.yml
 .env
 .env.*
 !.env.example
+# Mosquitto 密码文件：由 mosquitto_passwd 生成，含明文账号密码，不入库
+deploy/mosquitto/passwd
 
 ### Local AI / tool config ###
 .claude/

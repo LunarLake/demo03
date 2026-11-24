@@ -8,14 +8,14 @@
 | 形态 | 配置 | 说明 |
 |---|---|---|
 | **A. 默认（推荐起步）** | `app.door.mode=log` | 不做任何 MQTT，签到成功直接回"门禁已开锁"，日志里每条都标 `[模拟门禁]`。用来跑业务与答辩演示，不涉及网络 |
-| **B. MQTT 全链路（无需 Broker）** | `SPRING_PROFILES_ACTIVE=local,mqtt-demo` | 走进程内总线，后端与 `DeviceSimulator` 在同一进程里互通。**信封、HMAC、过期、去重、绑定全部真实执行**，能验证协议是否正确 |
-| **C. 真实 Broker** | `app.door.mode=mqtt` + `app.mqtt.mode=paho` | 连 Mosquitto。硬件到货后用它接 STM32 |
+| **B. MQTT 全链路（无需 Broker）** | `SPRING_PROFILES_ACTIVE=mqtt-demo` | 走进程内总线，后端与 `DeviceSimulator` 在同一进程里互通。**信封、HMAC、过期、去重、绑定全部真实执行**，能验证协议是否正确 |
+| **C. 真实 Broker** | `SPRING_PROFILES_ACTIVE=mqtt-broker` | 连 Mosquitto。硬件到货后用它接 STM32 |
 
 形态 B 是交付物里最重要的一种：它证明"协议跑得通"，而不只是"代码编译得过"。
 
 ```bash
-# 形态 B（必须同时激活 local，否则数据库密码配置不会加载）
-./mvnw spring-boot:run -Dspring-boot.run.profiles=local,mqtt-demo
+# 形态 B
+./mvnw spring-boot:run -Dspring-boot.run.profiles=mqtt-demo
 # 然后在页面上签到，控制台会打印：
 #   [LOCK] PULSE 3000ms  reason=FIRST_CHECKIN
 #   [SCREEN] ...
@@ -47,17 +47,88 @@ docker run --rm --network host eclipse-mosquitto:2 \
     -t room/ROOM-A-01/cmd -m '{"v":1}' -q 1
 ```
 
-## 三、把后端接到 Broker
+### 2.2 Windows 原生（本机没有 Docker 时）
+
+`winget install --id EclipseFoundation.Mosquitto -e` 装完之后，用仓库里的
+`mosquitto-windows.conf` 启动 —— 它与 `mosquitto.conf` 的安全设置逐条一致，
+只是把容器内的 `/mosquitto/config/*` 换成了相对项目根目录的路径。
 
 ```bash
-export MQTT_MODE=paho
-export MQTT_BROKER_URL=tcp://127.0.0.1:1883
-export MQTT_USERNAME=backend
-export MQTT_PASSWORD=change-me
-export DOOR_MODE=mqtt
-export SIMULATOR_ENABLED=true     # 没有真设备时用模拟器顶替
-./mvnw spring-boot:run
+cd <项目根>
+
+# 1) 生成密码文件（Windows 安装包自带 mosquitto_passwd.exe）
+MK="/c/Program Files/mosquitto/mosquitto_passwd.exe"
+"$MK" -c -b deploy/mosquitto/passwd backend change-me
+"$MK" -b deploy/mosquitto/passwd room-a room-a-secret
+"$MK" -b deploy/mosquitto/passwd room-b room-b-secret
+
+# 2) 必须先从命令行前台启动，确认配置真的加载了
+"/c/Program Files/mosquitto/mosquitto.exe" -c deploy/mosquitto/mosquitto-windows.conf -v
 ```
+
+**两个必读的坑：**
+
+1. **安装包会自建一个同名 Windows 服务并自动启动**，用
+   `C:\Program Files\mosquitto\mosquitto.conf`（全默认、`allow_anonymous true`）
+   占住 1883。不清掉它，上面的命令直接报 `Address in use`。
+   需要管理员权限执行：
+   ```powershell
+   net stop mosquitto
+   sc.exe config mosquitto start= disabled
+   ```
+   这个默认配置**允许匿名发布**（实测 `mosquitto_pub` 不带账号也能成功），
+   联调期间留着它等于开着一个谁都能往任意主题发消息的后门。
+
+2. **必须从项目根目录启动**。`password_file` / `acl_file` 是相对路径，
+   相对的是进程工作目录；用服务方式跑（CWD 是 System32）会找不到文件。
+
+绑 `0.0.0.0` 是为了让 ESP8266 从局域网连进来，首次启动 Windows 会弹防火墙授权框，
+选"允许（专用网络）"即可。
+
+### 2.3 冒烟：确认 ACL 真的在拦
+
+只验证"能连上"不够，必须做反向验证，否则 ACL 没生效你也看不出来：
+
+```bash
+P="/c/Program Files/mosquitto/mosquitto_pub.exe"
+S="/c/Program Files/mosquitto/mosquitto_sub.exe"
+
+# ① 匿名应被拒（exit=5, not authorised）
+"$P" -h 127.0.0.1 -p 1883 -t room/ROOM-A-01/cmd -m '{}' -q 1
+
+# ② 合法发布应成功（exit=0）
+"$P" -h 127.0.0.1 -p 1883 -u backend -P change-me -t room/ROOM-A-01/cmd -m '{}' -q 1
+
+# ③ 越权发布：注意 exit=0 是假象，要到 Broker 日志里看 "Denied PUBLISH ... rc135"
+"$P" -h 127.0.0.1 -p 1883 -u room-a -P room-a-secret -t room/ROOM-B-01/cmd -m '{}' -q 1
+```
+
+第 ③ 条有个容易误判的地方：**MQTT 3.1.1 下 Broker 对越权发布是静默丢弃**，
+客户端收不到错误，`mosquitto_pub` 照样 exit=0。真正的判据是 Broker 日志出现
+`Denied PUBLISH ... (m1, rc135)`（135 = 0x87 Not authorized），
+或者用订阅端确认消息没被投递。
+
+同理，**订阅放行也不等于能收到消息**：`room-a` 订阅 `#` 会拿到成功的 SUBACK，
+但投递阶段逐条按 ACL 过滤，实测它只能收到 `room/ROOM-A-01/*`，
+收不到 `room/ROOM-B-01/*`。所以"设备误配成 `#`"在 SUBACK 层面看不出来，
+只能靠投递侧验证——这一点排障时要记住。
+
+## 三、把后端接到 Broker
+
+形态 C 的全部配置都在 `src/main/resources/application-mqtt-broker.yml`，
+默认值即下表的演示配置，**启动前不用 export 任何变量**：
+
+```bash
+./mvnw spring-boot:run -Dspring-boot.run.profiles=mqtt-broker
+```
+
+| 需要改的时候 | 用环境变量覆盖 |
+|---|---|
+| Broker 不在本机 | `MQTT_BROKER_URL=tcp://192.168.1.10:1883` |
+| 换账号密码 | `MQTT_USERNAME` / `MQTT_PASSWORD` |
+| 没有真机、想用模拟器接真 Broker | `SIMULATOR_ENABLED=true` |
+
+`local` 由 `application.yml` 的 profile 组自动带上，不需要再写 `local,`。
 
 连不上 Broker 时应用**照常启动**：门禁显示离线、开门被拒并提示使用机械释放杆，
 但预约、签到、申诉全部正常。这是刻意的——门禁故障不该让整个系统不可用。

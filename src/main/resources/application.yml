@@ -4,6 +4,13 @@ spring:
   # 默认启用 local 配置；生产可设 SPRING_PROFILES_ACTIVE=prod 等
   profiles:
     active: ${SPRING_PROFILES_ACTIVE:local}
+    # profile 组：激活任一门禁形态时自动带上 local。
+    # 没有这一段时，命令行指定 profile 会顶掉上面的默认 local，
+    # 导致 application-local.yml 不加载、数据库认证失败（历史踩坑点）。
+    # 有了 group，`-Dspring-boot.run.profiles=mqtt-broker` 等价于 `local,mqtt-broker`。
+    group:
+      mqtt-demo: local
+      mqtt-broker: local
   datasource:
     url: jdbc:mysql://${DB_HOST:localhost}:${DB_PORT:3306}/${DB_NAME:db02}?useUnicode=true&characterEncoding=utf-8&useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Shanghai
     driver-class-name: com.mysql.cj.jdbc.Driver

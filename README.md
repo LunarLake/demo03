@@ -86,7 +86,7 @@ src/main/java/com/wyc/demo03/
 └─ common/         拦截器、异常处理、统一响应
 
 sql/               schema-v2.sql / migrate-v1-to-v2.sql / init-demo.sql
-deploy/mosquitto/  mosquitto.conf + ACL + 部署说明
+deploy/mosquitto/  mosquitto.conf（Docker）+ mosquitto-windows.conf（原生）+ ACL + 部署说明
 docs/              施工图、验收对照、测试盘点
 scripts/           mqtt-e2e.sh（门禁链路证据收集）
 ```
@@ -108,16 +108,42 @@ scripts/           mqtt-e2e.sh（门禁链路证据收集）
 
 ## 4. 快速开始
 
-### 4.1 环境
+### 4.1 前置依赖
 
-- JDK 21（项目带 `mvnw`，无需另装 Maven）
-- MySQL 8.0，端口 3306
+| 依赖 | 版本 | 必需性 | 说明 |
+|---|---|---|---|
+| JDK | 21 | **必需** | 项目带 `mvnw`，不需要单独装 Maven |
+| MySQL | 8.0 | **必需** | 端口 3306，库名 `db02` |
+| Mosquitto | 2.x | 可选 | 只有接真实门禁（形态 C）才需要 |
+| Docker | 任意 | 可选 | 跑 Mosquitto 的方式之一；没有就用原生版 |
 
-### 4.2 初始化数据库
+```bash
+java -version      # 必须是 21
+mysql --version
+docker --version   # 可选
+```
+
+**JDK 不是 21 时**（Windows 默认 `java` 常是 JRE 1.8，IDE 下载的 JDK 一般在
+`C:\Users\<用户名>\.jdks\`）：
+
+```bash
+export JAVA_HOME="C:/Users/<用户名>/.jdks/ms-21.0.12.1"
+export PATH="/c/Users/<用户名>/.jdks/ms-21.0.12.1/bin:$PATH"
+```
+
+> Git Bash 下 `PATH` 必须写成 `/c/...` 形式。写成 `C:/...` 不生效，会静默退回系统 JRE，
+> 报的错却是"不支持的 class 版本"，很容易查错方向。
+
+### 4.2 第一步：初始化数据库
 
 ```bash
 mysql -u root -p < sql/schema-v2.sql
 ```
+
+脚本自带 `CREATE DATABASE IF NOT EXISTS db02` 与 `USE db02`，不用先手工建库。
+它会 **DROP 全部业务表后重建**，并写入 2 个房间、2 台设备、5 个账号与初始规则版本。
+
+> ⚠️ 已有数据的环境不要执行本脚本，改用 `sql/migrate-v1-to-v2.sql` 做保数据迁移。
 
 演示账号（统一密码 `demo123`）：
 
@@ -127,37 +153,135 @@ mysql -u root -p < sql/schema-v2.sql
 | `teacher01` | 教师 |
 | `admin01` | 管理员 |
 
-### 4.3 启动
+### 4.3 第二步：配置数据库密码
+
+`application.yml` 里的密码是 `${DB_PASSWORD:}`，默认为空。本地开发把密码放在
+`application-local.yml`（该文件已在 `.gitignore`，不会误提交）：
 
 ```bash
-# Windows Git Bash 下指定 JDK（本机默认 java 可能是 JRE 1.8）
-export JAVA_HOME="C:/Users/<用户名>/.jdks/ms-21.0.12.1"
-export PATH="/c/Users/<用户名>/.jdks/ms-21.0.12.1/bin:$PATH"
-
-./mvnw spring-boot:run
+cp src/main/resources/application-local.yml.example src/main/resources/application-local.yml
 ```
 
-> ⚠️ 若环境中存在 `SERVER__PORT` 变量（WorkBuddy 会注入），它会顶掉 `server.port`
-> 并导致"端口被占用"的误报。启动前 `unset SERVER__PORT` 或显式加 `--server.port=8080`。
+编辑成：
 
-### 4.4 三种门禁形态
+```yaml
+spring:
+  datasource:
+    username: root
+    password: 你的密码
+```
 
-| 形态 | 启动方式 | 说明 |
+也可以直接用环境变量 `DB_PASSWORD`。优先级：**环境变量 > `application-local.yml` > `application.yml`**。
+
+### 4.4 第三步：启动
+
+| 形态 | 命令 | 需要 Broker | 能验证什么 |
+|---|---|---|---|
+| **A 默认** | `./mvnw spring-boot:run` | 否 | 业务全流程；门禁只记日志 `[模拟门禁]` |
+| **B 协议全链路** | `./mvnw spring-boot:run -Dspring-boot.run.profiles=mqtt-demo` | 否 | 信封、HMAC、过期、去重、绑定**全部真跑**；控制台见 `[LOCK] PULSE 3000ms` |
+| **C 真实 Broker** | `./mvnw spring-boot:run -Dspring-boot.run.profiles=mqtt-broker` | 是 | 接 Mosquitto 与真机 |
+
+**建议先用 A 确认页面能打开，再切 B 证明协议正确。** 形态 B 是"没有硬件时最能说明
+问题"的形态，答辩默认用它——它证明的是协议跑得通，而不只是代码编译得过。
+
+三种形态的差异全部落在配置文件中，**换形态只需换 profile，启动前不用 export 任何环境变量**：
+
+| 配置文件 | 对应形态 | 关键配置 |
 |---|---|---|
-| **A 默认** | `./mvnw spring-boot:run` | 门禁只记录不执行，日志标 `[模拟门禁]` |
-| **B 协议全链路** | `-Dspring-boot.run.profiles=local,mqtt-demo` | 进程内总线，无需 Broker；控制台可见 `[LOCK] PULSE 3000ms` |
-| **C 真实 Broker** | `MQTT_MODE=paho DOOR_MODE=mqtt` + Mosquitto | 见 [`deploy/mosquitto/README.md`](deploy/mosquitto/README.md) |
+| `application.yml`（默认） | A | `door.mode=log`、`mqtt.mode=inprocess`、模拟器关 |
+| `application-mqtt-demo.yml` | B | `door.mode=mqtt`、`mqtt.mode=inprocess`、模拟器开 |
+| `application-mqtt-broker.yml` | C | `door.mode=mqtt`、`mqtt.mode=paho`、模拟器关 |
 
-> ★ 形态 B **必须同时带 `local`**：命令行指定 profile 会顶掉默认 profile，
-> 导致 `application-local.yml` 里的数据库密码不加载。
+> `mqtt-demo` / `mqtt-broker` 已在 `application.yml` 的 **profile 组**里声明了 `local`，
+> 所以**不需要再手写 `local,`**。历史上漏写会让 `application-local.yml` 不加载、
+> 报数据库认证失败；现在这条由配置保证，不靠人记。
 
-### 4.5 演示前复位
+启动前仍建议清掉可能被注入的端口变量：
+
+```bash
+unset SERVER__PORT
+```
+
+### 4.5 第四步：确认启动成功
+
+日志出现这两行即可：
+
+```
+Tomcat started on port 8080 (http) with context path '/'
+Started Demo03Application in 2.4 seconds
+```
+
+形态 B 还会多出设备模拟器的输出：
+
+```
+[SIM] 设备模拟器已启动：device=ROOM-A-01 failRate=0.0
+[SCREEN] status=FREE
+```
+
+浏览器打开 `http://localhost:8080`，用 `student01` / `demo123` 登录。
+
+### 4.6 第五步：接真实门禁（可选）
+
+三步：**起 Broker → 后端切 paho → 设备上电**。完整步骤（含无 Docker 时的 Windows 原生
+启动、ACL 反向验证、设备侧五步校验、常见坑）见
+[`deploy/mosquitto/README.md`](deploy/mosquitto/README.md)，这里只给最小命令。
+
+```bash
+# 1) 起 Broker（Docker 方式；没有 Docker 见 deploy/mosquitto/README.md 第 2.2 节）
+docker run -d --name mosquitto -p 1883:1883 \
+  -v "$PWD/deploy/mosquitto/mosquitto.conf:/mosquitto/config/mosquitto.conf:ro" \
+  -v "$PWD/deploy/mosquitto/acl:/mosquitto/config/acl:ro" \
+  -v "$PWD/deploy/mosquitto/passwd:/mosquitto/config/passwd:ro" \
+  eclipse-mosquitto:2
+
+# 2) 后端切到形态 C —— 一个 profile 就够了
+./mvnw spring-boot:run -Dspring-boot.run.profiles=mqtt-broker
+```
+
+Broker 地址与账号的默认值都写在 `application-mqtt-broker.yml` 里，
+默认 `tcp://127.0.0.1:1883` + `backend/change-me`，与 `deploy/mosquitto/passwd`
+中的演示账号一一对应。换环境时用环境变量覆盖即可，不必改文件：
+
+| 环境变量 | 默认值 | 说明 |
+|---|---|---|
+| `MQTT_BROKER_URL` | `tcp://127.0.0.1:1883` | Broker 地址 |
+| `MQTT_USERNAME` / `MQTT_PASSWORD` | `backend` / `change-me` | 正式环境必须换 |
+| `SIMULATOR_ENABLED` | `false` | 没有真机时可设 `true`，让模拟器接真实 Broker |
+
+`/admin/devices` 页面的"通道"显示 `mqtt:paho`，才说明真的走了 Broker 而不是日志桩。
+
+设备侧只需要对上三个值（决定主题名、签名、Broker 登录）：
+
+| 项 | 值 | 存在哪 |
+|---|---|---|
+| `deviceCode` | `ROOM-A-01` | `t_device.device_code` |
+| HMAC 密钥 | `demo-secret-room-a-please-change` | `t_device.secret` |
+| Broker 账号 | `room-a` / `room-a-secret` | `deploy/mosquitto/passwd` |
+
+> 签名密钥和 Broker 账号密码是**两套凭据**，互不影响。`ERR_HMAC` 是前者的问题，
+> 连不上 1883 是后者的问题，排障别混。上正式环境时两套都要换掉。
+
+### 4.7 演示前复位
 
 ```bash
 mysql -u root -p db02 < sql/init-demo.sql
 ```
 
 清空预约、签到、信用、申诉、日志，保留账号/房间/设备/规则版本。
+
+### 4.8 常见问题
+
+| 现象 | 原因 | 处理 |
+|---|---|---|
+| `Port 8080 was already in use` | 8080 被别的进程占用 | `SERVER_PORT=18080 ./mvnw spring-boot:run` |
+| "端口被占用"但 8080 明明是空的 | 环境注入了 `SERVER__PORT` | `unset SERVER__PORT` 后重启 |
+| `Access denied for user 'root'@'localhost'` | `application-local.yml` 缺失或密码错 | 按 4.3 重新生成 |
+| 指定 profile 后连不上数据库 | 自建的 profile 没带 `local` | 内置的 `mqtt-demo` / `mqtt-broker` 已自动带 `local`；自建 profile 需写 `local,xxx` |
+| `不支持的 class 文件版本` | `PATH` 里的 JDK 是 1.8 | 按 4.1 用 `/c/...` 形式重设 `PATH` |
+| 门禁显示离线、开门被拒 | Broker 未连上或设备无心跳 | 见 [deploy/mosquitto/README.md](deploy/mosquitto/README.md)；预约/签到等业务不受影响 |
+| 原生 Mosquitto 报 `Address in use` | 安装包自建的服务占着 1883 | 见 [deploy/mosquitto/README.md](deploy/mosquitto/README.md) 第 2.2 节 |
+| 设备回执全是 `ERR_HMAC` | 固件里的密钥与 `t_device.secret` 不一致 | 两边逐字节对齐（UTF-8） |
+| 开锁指令全是 `ERR_EXPIRED` | 设备时钟偏差超过 TTL（30 秒） | 设备侧 NTP 校时，时区固定东八区 |
 
 ## 5. 页面清单
 
@@ -196,14 +320,18 @@ mysql -u root -p db02 < sql/init-demo.sql
 |---|---|
 | [`docs/重构改造计划.md`](docs/重构改造计划.md) | 施工图：冲突清单、数据模型、状态机、分阶段任务与**实际进度记录** |
 | [`docs/acceptance.md`](docs/acceptance.md) | AC-01 ~ AC-30 逐条对照与手工验收清单 |
-| [`docs/test-inventory.md`](docs/test-inventory.md) | 基线测试盘点与 P2 重写结果 |
+| [`docs/demo.md`](docs/demo.md) | 5 分钟答辩演示脚本、兜底方案与预备问答 |
+| [`docs/小组分工.md`](docs/小组分工.md) | 团队分工、阶段任务与贡献度口径 |
 | [`deploy/mosquitto/README.md`](deploy/mosquitto/README.md) | MQTT 部署、主题约定、设备侧五步校验 |
 | [`sql/schema-v2.sql`](sql/schema-v2.sql) | 建表 + 演示数据 |
 
 ## 8. 已知限制
 
-- 真实 Mosquitto 与 STM32 未在本机联调（`PahoMqttGateway` 只有编译保证，
-  协议逻辑由进程内实现全覆盖）；硬件到货后需按 `deploy/mosquitto/README.md` 走一遍形态 C。
+- **Mosquitto 链路已在本机实测走通**（2026-11-24）：Broker 启动、连接订阅、retained 快照、
+  心跳鉴权、回执结算、越权拦截均验证通过；HMAC 规范用 Python 独立复现，与后端签名逐字节一致。
+  复现步骤见 [`deploy/mosquitto/README.md`](deploy/mosquitto/README.md)。
+- **真机（STM32F103 + ESP8266）尚未接入**：`DeviceSimulator` 与真机执行同一套五步校验，
+  但物理开锁、断电重连、时钟漂移等只有在硬件上才能验。硬件到货后按 4.6 走一遍形态 C。
 - 超时占用与违规使用靠管理员手工认定，一期无传感器。
 - 审计日志只保留 7 天，超过期限的判定依据不再可查（因此判定信息写在业务表上）。
 - `PermissionInterceptor`（权限点模型）尚未落地，管理路由仍按角色拦截。

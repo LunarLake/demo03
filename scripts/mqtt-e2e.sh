@@ -27,7 +27,7 @@ mkdir -p target
 # 本机 WorkBuddy 会注入 SERVER__PORT，会顶掉 server.port
 unset SERVER__PORT
 
-echo "== 启动（profile=local,mqtt-demo, port=$PORT） =="
+echo "== 启动（profile=mqtt-demo, port=$PORT） =="
 echo "   门禁通道：MQTT（进程内总线，无需 Broker）"
 echo "   设备模拟器：ROOM-A-01"
 echo
@@ -37,7 +37,7 @@ export JAVA_HOME
 export PATH="/c/Users/$USERNAME/.jdks/ms-21.0.12.1/bin:$PATH"
 
 ./mvnw -o spring-boot:run \
-  -Dspring-boot.run.arguments="--server.port=$PORT --spring.profiles.active=local,mqtt-demo" \
+  -Dspring-boot.run.arguments="--server.port=$PORT --spring.profiles.active=mqtt-demo" \
   > "$LOG" 2>&1 &
 APP_PID=$!
 

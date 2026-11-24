@@ -10,7 +10,7 @@
 mysql -u root -p db02 < sql/init-demo.sql
 
 # 2) 以 MQTT 全链路模式启动（控制台能看到 [LOCK] / [SIM]）
-./mvnw spring-boot:run -Dspring-boot.run.profiles=local,mqtt-demo
+./mvnw spring-boot:run -Dspring-boot.run.profiles=mqtt-demo
 ```
 
 打开两个浏览器窗口：
