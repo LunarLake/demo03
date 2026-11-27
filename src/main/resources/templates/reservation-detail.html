@@ -96,7 +96,7 @@
                     <input type="hidden" name="_csrf" th:value="${_csrf}" />
                     <input type="hidden" name="id" th:value="${detail['id']}" />
                     <input type="hidden" name="type" value="OVERTIME" />
-                    <input type="text" name="note" class="form-control form-control-sm" style="max-width: 320px"
+                    <input type="text" name="note" class="form-control form-control-sm ui-maxw-320"
                            maxlength="200" placeholder="认定说明（选填）" />
                     <button type="submit" class="btn btn-sm btn-outline-warning">
                         认定超时占用（−5）
@@ -107,7 +107,7 @@
                     <input type="hidden" name="_csrf" th:value="${_csrf}" />
                     <input type="hidden" name="id" th:value="${detail['id']}" />
                     <input type="hidden" name="type" value="VIOLATION" />
-                    <input type="text" name="note" class="form-control form-control-sm" style="max-width: 320px"
+                    <input type="text" name="note" class="form-control form-control-sm ui-maxw-320"
                            maxlength="200" placeholder="违规事实说明（建议填写）" />
                     <button type="submit" class="btn btn-sm btn-outline-danger">
                         认定违规使用（−20）

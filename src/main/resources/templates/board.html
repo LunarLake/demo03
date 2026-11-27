@@ -31,8 +31,7 @@
               type="date"
               name="date"
               id="datePicker"
-              class="form-control form-control-sm"
-              style="width: 150px"
+              class="form-control form-control-sm ui-w-150"
               th:value="${date}"
             />
             <button class="btn btn-sm btn-primary" type="submit">查看</button>
@@ -65,7 +64,7 @@
         <!-- 底部操作栏 -->
         <div class="board-action mt-3">
           <div class="d-flex flex-wrap align-items-end gap-2">
-            <div class="flex-grow-1" style="min-width: 180px">
+            <div class="flex-grow-1 ui-minw-180">
               <div class="small text-muted">已选时段</div>
               <div id="selText">
                 <span class="sel-empty">尚未选择（拖动框选，或点两次选起止）</span>
@@ -112,8 +111,7 @@
               <input
                 type="number"
                 id="attendeeCount"
-                class="form-control form-control-sm"
-                style="width: 80px"
+                class="form-control form-control-sm ui-w-80"
                 min="1"
                 max="99"
                 value="2"
@@ -126,8 +124,7 @@
               <input
                 type="text"
                 id="purpose"
-                class="form-control form-control-sm"
-                style="width: 200px"
+                class="form-control form-control-sm ui-w-200"
                 maxlength="200"
                 placeholder="如：小组讨论"
               />

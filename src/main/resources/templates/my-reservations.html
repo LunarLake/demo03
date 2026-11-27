@@ -82,9 +82,11 @@
                     th:text="${r['attendee_count'] != null ? r['attendee_count'] : '-'}"
                   ></td>
                   <td
+                    class="ui-num"
                     th:text="${#temporals.format(r['start_time'], 'yyyy-MM-dd HH:mm')}"
                   ></td>
                   <td
+                    class="ui-num"
                     th:text="${#temporals.format(r['end_time'], 'yyyy-MM-dd HH:mm')}"
                   ></td>
                   <td>

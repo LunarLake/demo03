@@ -101,6 +101,16 @@
   font-variant-numeric: tabular-nums;
 }
 
+/* 少量固定宽度工具类，替代模板里的内联 style="width: Npx" */
+.ui-w-80 { width: 80px; }
+.ui-w-110 { width: 110px; }
+.ui-w-120 { width: 120px; }
+.ui-w-150 { width: 150px; }
+.ui-w-200 { width: 200px; }
+.ui-minw-180 { min-width: 180px; }
+.ui-minw-260 { min-width: 260px; }
+.ui-maxw-320 { max-width: 320px; }
+
 /* 空态：表格里用 ui-empty-row，卡片里用 ui-empty */
 .ui-empty {
   display: flex;

@@ -36,7 +36,7 @@
                     <th>申诉说明</th>
                     <th>原处理依据</th>
                     <th>应办结</th>
-                    <th style="min-width: 260px">复核</th>
+                    <th class="ui-minw-260">复核</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -61,7 +61,7 @@
                       >
                         <input type="hidden" name="_csrf" th:value="${_csrf}" />
                         <input type="hidden" name="id" th:value="${a['id']}" />
-                        <select name="status" class="form-select form-select-sm" style="width: 110px">
+                        <select name="status" class="form-select form-select-sm ui-w-110">
                           <option value="UPHELD">维持原判</option>
                           <option value="REVOKED">申诉成立</option>
                           <option value="PARTIAL">部分成立</option>
@@ -69,8 +69,7 @@
                         <input
                           type="text"
                           name="note"
-                          class="form-control form-control-sm"
-                          style="width: 120px"
+                          class="form-control form-control-sm ui-w-120"
                           placeholder="意见"
                           maxlength="500"
                         />

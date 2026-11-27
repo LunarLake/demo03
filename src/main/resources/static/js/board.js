@@ -220,6 +220,10 @@
       blockers.push(limits.blockReason || '当前信用分不满足预约条件');
     }
     const overCapacity = !!(room && room.capacity && attendee > room.capacity);
+    if (room && room.capacity) {
+      // 人数框的上限跟着所选房间走，别让用户填到 99 才发现超员
+      attendeeInput.max = String(room.capacity);
+    }
     if (overCapacity) {
       blockers.push('该会议室最多 ' + room.capacity + ' 人，请调整人数或换一间');
     }
