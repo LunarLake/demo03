@@ -87,12 +87,16 @@ public class ReservationController {
      * @param date 为空表示今天
      */
     @GetMapping("/reservation/board")
-    public String board(@RequestParam(required = false) String date, Model model, HttpSession session) {
+    public String board(@RequestParam(required = false) String date,
+                        @RequestParam(required = false) Long roomId,
+                        Model model, HttpSession session) {
         LocalDate day = parseDate(date);
         model.addAttribute("date", day.toString());
         model.addAttribute("today", LocalDate.now().toEpochDay() == day.toEpochDay());
         model.addAttribute("prevDate", day.minusDays(1).toString());
         model.addAttribute("nextDate", day.plusDays(1).toString());
+        // 从会议室卡片进入时带上目标房间，前端据此滚动定位并高亮该行
+        model.addAttribute("focusRoomId", roomId);
         return "board";
     }
 

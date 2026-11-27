@@ -132,6 +132,37 @@ class TemplateRenderingTest {
         assertTrue(html.contains("board.js"), "排期逻辑在独立脚本里");
     }
 
+    @Test
+    @DisplayName("排期板：起止可独立微调，不依赖拖拽也能改起点")
+    void boardProvidesStartEndAdjustControls() {
+        String html = engine().process("board", context("STUDENT",
+                model("date", "2026-10-21", "today", true,
+                        "prevDate", "2026-10-20", "nextDate", "2026-10-22")));
+
+        assertTrue(html.contains("id=\"selAdjust\""), "需要起止微调控件的挂载点");
+        assertTrue(html.contains("data-adjust=\"from\""), "起点必须能单独调整");
+        assertTrue(html.contains("data-adjust=\"to\""), "终点必须能单独调整");
+        assertTrue(html.contains("id=\"fromLabel\""), "起点时间要能读出来");
+        assertTrue(html.contains("id=\"toLabel\""), "终点时间要能读出来");
+    }
+
+    @Test
+    @DisplayName("排期板：带 roomId 进来才渲染定位标记，避免空属性")
+    void boardMarksFocusRoomOnlyWhenProvided() {
+        String withFocus = engine().process("board", context("STUDENT",
+                model("date", "2026-10-21", "today", true,
+                        "prevDate", "2026-10-20", "nextDate", "2026-10-22",
+                        "focusRoomId", 3L)));
+        assertTrue(withFocus.contains("data-focus-room=\"3\""),
+                "从会议室卡片进入时要把目标房间交给前端做定位");
+
+        String withoutFocus = engine().process("board", context("STUDENT",
+                model("date", "2026-10-21", "today", true,
+                        "prevDate", "2026-10-20", "nextDate", "2026-10-22")));
+        assertFalse(withoutFocus.contains("data-focus-room"),
+                "没有目标房间时不应渲染该属性");
+    }
+
     // ==================== P3 新增页面 ====================
 
     @Test

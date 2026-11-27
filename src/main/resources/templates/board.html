@@ -10,7 +10,11 @@
     <main class="content-area flex-grow-1">
       <th:block th:replace="~{fragments/header :: header('预约排期')}"></th:block>
 
-      <section class="container-fluid py-3 px-2 px-md-4 board-shell" data-board th:attr="data-date=${date}">
+      <section
+        class="container-fluid py-3 px-2 px-md-4 board-shell"
+        data-board
+        th:attr="data-date=${date},data-focus-room=${focusRoomId}"
+      >
         <!-- 日期切换 -->
         <div class="d-flex flex-wrap align-items-center gap-2 mb-2">
           <div class="btn-group btn-group-sm" role="group" aria-label="切换日期">
@@ -34,7 +38,7 @@
             <button class="btn btn-sm btn-primary" type="submit">查看</button>
           </form>
           <span class="text-muted small ms-auto d-none d-md-inline">
-            点第一格选开始，点第二格选结束
+            拖动框选时段，或点两次选起止；选中后可拖两端微调
           </span>
         </div>
 
@@ -61,7 +65,43 @@
             <div class="flex-grow-1" style="min-width: 180px">
               <div class="small text-muted">已选时段</div>
               <div id="selText">
-                <span class="sel-empty">尚未选择（点上表任意可预约格开始）</span>
+                <span class="sel-empty">尚未选择（拖动框选，或点两次选起止）</span>
+              </div>
+            </div>
+            <div id="selAdjust" class="d-none">
+              <div class="btn-group btn-group-sm me-1" role="group" aria-label="调整开始时间">
+                <button
+                  type="button"
+                  class="btn btn-outline-secondary"
+                  data-adjust="from"
+                  data-delta="-1"
+                  aria-label="开始时间提前 15 分钟"
+                >−</button>
+                <button type="button" class="btn btn-outline-secondary" disabled id="fromLabel">--:--</button>
+                <button
+                  type="button"
+                  class="btn btn-outline-secondary"
+                  data-adjust="from"
+                  data-delta="1"
+                  aria-label="开始时间推后 15 分钟"
+                >+</button>
+              </div>
+              <div class="btn-group btn-group-sm" role="group" aria-label="调整结束时间">
+                <button
+                  type="button"
+                  class="btn btn-outline-secondary"
+                  data-adjust="to"
+                  data-delta="-1"
+                  aria-label="结束时间提前 15 分钟"
+                >−</button>
+                <button type="button" class="btn btn-outline-secondary" disabled id="toLabel">--:--</button>
+                <button
+                  type="button"
+                  class="btn btn-outline-secondary"
+                  data-adjust="to"
+                  data-delta="1"
+                  aria-label="结束时间推后 15 分钟"
+                >+</button>
               </div>
             </div>
             <div>

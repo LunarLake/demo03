@@ -1,7 +1,12 @@
 /* =============================================================
  * 预约排期板（P6-T02）
  * -------------------------------------------------------------
- * 交互：点第一格选开始，点第二格选结束；区间内必须全是可选格。
+ * 交互（v2，2026-11-27 点按手感优化）：
+ *   - 鼠标/触控板：按住拖动直接框选；拖选区两端把手可单独调整起止
+ *   - 触摸屏：保留「点两次」，并配合底部 ±15 分钟微调
+ *     （触摸设备不启用拖动，否则会和排期板自身的横向滚动打架）
+ *   - 键盘：格子是 button，Tab 聚焦后 Enter/Space 等价于点击
+ *
  * 只做展示与点选，**规则判断一律交给后端**（SlotSchema + RuleEngine），
  * 前端不复制一份"哪些时段合法"的逻辑，避免两边口径漂移。
  * ============================================================= */
@@ -20,11 +25,23 @@
   const errorBox = document.getElementById('boardError');
   const toastEl = document.getElementById('toast');
   const toastText = document.getElementById('toastText');
+  const selAdjust = document.getElementById('selAdjust');
+  const fromLabel = document.getElementById('fromLabel');
+  const toLabel = document.getElementById('toLabel');
   const csrfMeta = document.querySelector('meta[name="_csrf"]');
   const csrf = csrfMeta ? csrfMeta.content : '';
 
+  // 精细指针（鼠标、触控板）才启用拖动选择
+  const finePointer = window.matchMedia('(pointer: fine)').matches;
+
   let board = null;
-  let selection = null; // { roomId, from, to }
+  let selection = null;    // { roomId, from, to }
+  let awaitingEnd = false; // true = 刚选定起点，等第二次点击确定终点
+  let drag = null;         // { roomId, anchor, index, moved }
+  let edgeDrag = null;     // { roomId, edge: 'from' | 'to' }
+  let focusApplied = false;
+  const cellMap = new Map(); // "roomId:index" → 单元格元素
+  let painted = null;        // 上一帧画过的选区，拖动时只清这一段
 
   const STATE_TEXT = {
     FREE: '可预约',
@@ -42,7 +59,11 @@
   // ---------------------------------------------------------------
   function render() {
     if (!board) return;
+    // 列数来自后端 SlotSchema，避免 CSS 里硬编码 56 与实际配置脱节
+    grid.style.setProperty('--slot-count', String(board.slotsPerDay));
     grid.innerHTML = '';
+    cellMap.clear();
+    painted = null;
 
     const corner = document.createElement('div');
     corner.className = 'board-head-cell board-head-corner';
@@ -62,6 +83,7 @@
     board.rooms.forEach(function (room) {
       const head = document.createElement('div');
       head.className = 'room-head';
+      head.dataset.room = String(room.roomId);
       const name = document.createElement('div');
       name.className = 'room-name';
       name.textContent = room.roomName;
@@ -83,6 +105,7 @@
         btn.setAttribute('aria-label',
           room.roomName + ' ' + slot.label + ' ' + (STATE_TEXT[slot.state] || slot.state));
         grid.appendChild(btn);
+        cellMap.set(room.roomId + ':' + slot.index, btn);
       });
     });
 
@@ -90,37 +113,252 @@
   }
 
   // ---------------------------------------------------------------
-  // 点选
+  // 选区绘制
   // ---------------------------------------------------------------
-  grid.addEventListener('click', function (event) {
-    const btn = event.target.closest('.slot');
-    if (!btn || !board) return;
+  function paint() {
+    if (!board) return;
+    grid.querySelectorAll('.edge-handle').forEach(function (el) { el.remove(); });
+    clearPaint();
 
-    const roomId = Number(btn.dataset.room);
-    const index = Number(btn.dataset.index);
-
-    if (btn.dataset.actionable !== '1') {
-      const room = findRoom(roomId);
-      const slot = room ? room.slots[index] : null;
-      toast(slot && slot.hint ? slot.hint : '该时段不可选');
+    if (!selection) {
+      selText.innerHTML = '<span class="sel-empty">尚未选择（拖动框选，或点两次选起止）</span>';
+      toggleAdjust(false);
+      btnSubmit.disabled = true;
+      btnClear.disabled = true;
       return;
     }
 
-    if (!selection || selection.roomId !== roomId) {
-      selection = { roomId: roomId, from: index, to: index };
-    } else {
+    const from = Math.min(selection.from, selection.to);
+    const to = Math.max(selection.from, selection.to);
+
+    for (let i = from; i <= to; i++) {
+      const cell = cellMap.get(selection.roomId + ':' + i);
+      if (cell) cell.classList.add('is-selected');
+    }
+    painted = { roomId: selection.roomId, from: from, to: to };
+
+    const room = findRoom(selection.roomId);
+    const minutes = (to - from + 1) * board.unitMinutes;
+    const suffix = awaitingEnd
+      ? '<span class="text-muted small ms-2">再点一格确定结束时间</span>'
+      : '<span class="text-muted small ms-2">可拖两端微调</span>';
+
+    selText.innerHTML =
+      '<span class="sel-time">' + escapeHtml(room ? room.roomName : '') +
+      '　' + timeAt(from) + '–' + timeAt(to + 1) + '</span>' +
+      '<span class="text-muted small ms-2">' + minutes + ' 分钟</span>' + suffix;
+
+    const dragging = !!(drag || edgeDrag);
+    btnSubmit.disabled = awaitingEnd || dragging;
+    btnClear.disabled = false;
+
+    // 选区完整且不在拖动中时，才挂两端把手
+    if (!awaitingEnd && !dragging) {
+      addHandle(from, 'from');
+      addHandle(to, 'to');
+    }
+
+    toggleAdjust(!awaitingEnd);
+    if (!awaitingEnd) {
+      fromLabel.textContent = timeAt(from);
+      toLabel.textContent = timeAt(to + 1);
+    }
+  }
+
+  function clearPaint() {
+    if (!painted) return;
+    for (let i = painted.from; i <= painted.to; i++) {
+      const cell = cellMap.get(painted.roomId + ':' + i);
+      if (cell) cell.classList.remove('is-selected');
+    }
+    painted = null;
+  }
+
+  function addHandle(index, edge) {
+    const cell = cellMap.get(selection.roomId + ':' + index);
+    if (!cell) return;
+    const handle = document.createElement('span');
+    handle.className = 'edge-handle';
+    handle.dataset.edge = edge;
+    handle.setAttribute('aria-hidden', 'true');
+    cell.appendChild(handle);
+  }
+
+  function toggleAdjust(show) {
+    if (!selAdjust) return;
+    selAdjust.classList.toggle('d-none', !show);
+  }
+
+  // ---------------------------------------------------------------
+  // 点选（触摸、键盘，以及鼠标的"单击"）
+  // ---------------------------------------------------------------
+  function handleCellClick(roomId, index) {
+    const room = findRoom(roomId);
+    const slot = room && room.slots[index];
+    if (!slot) return;
+    if (!slot.actionable) {
+      toast(slot.hint || '该时段不可选');
+      return;
+    }
+
+    // 已有完整选区时，点在选区内部不改动它 —— 避免误点把选好的时段清掉。
+    // 想从区间内重新开始，用拖动，或先点「清空」。
+    if (selection && !awaitingEnd && selection.roomId === roomId) {
+      const lo = Math.min(selection.from, selection.to);
+      const hi = Math.max(selection.from, selection.to);
+      if (index >= lo && index <= hi) return;
+    }
+
+    if (selection && selection.roomId === roomId && awaitingEnd) {
       const from = Math.min(selection.from, index);
       const to = Math.max(selection.from, index);
       if (!rangeActionable(roomId, from, to)) {
-        toast('所选区间里有不可用的时段，请重新选择');
-        selection = { roomId: roomId, from: index, to: index };
-      } else {
-        selection = { roomId: roomId, from: from, to: to };
+        // 保留已选起点，让用户就近改终点，而不是把起点也丢掉
+        toast('起点与终点之间有不可用的时段，请就近选择');
+        return;
       }
+      selection = { roomId: roomId, from: from, to: to };
+      awaitingEnd = false;
+    } else {
+      selection = { roomId: roomId, from: index, to: index };
+      awaitingEnd = true;
     }
+    paint();
+  }
+
+  // ---------------------------------------------------------------
+  // 拖动框选 / 拖动边界
+  // ---------------------------------------------------------------
+  grid.addEventListener('pointerdown', function (event) {
+    if (!board || event.button !== 0) return;
+
+    const handle = event.target.closest('.edge-handle');
+    const cell = event.target.closest('.slot');
+    if (!cell) return;
+
+    if (handle && finePointer && !awaitingEnd) {
+      edgeDrag = { roomId: Number(cell.dataset.room), edge: handle.dataset.edge };
+      event.preventDefault();
+      return;
+    }
+
+    // 触摸设备交给 click，避免抢走横向滚动
+    if (!finePointer) return;
+
+    const roomId = Number(cell.dataset.room);
+    const index = Number(cell.dataset.index);
+    const room = findRoom(roomId);
+    const slot = room && room.slots[index];
+    if (!slot || !slot.actionable) {
+      toast((slot && slot.hint) || '该时段不可选');
+      return;
+    }
+
+    drag = { roomId: roomId, anchor: index, index: index, moved: false };
+    event.preventDefault();
+  });
+
+  window.addEventListener('pointermove', function (event) {
+    if (!board || (!drag && !edgeDrag)) return;
+
+    const el = document.elementFromPoint(event.clientX, event.clientY);
+    const cell = el && el.closest ? el.closest('.slot') : null;
+    if (!cell) return;
+
+    const roomId = Number(cell.dataset.room);
+    const index = Number(cell.dataset.index);
+
+    if (drag) {
+      if (roomId !== drag.roomId) return;
+      if (index !== drag.anchor) drag.moved = true;
+      drag.index = index;
+      const end = clampIndex(drag.roomId, drag.anchor, index);
+      selection = {
+        roomId: drag.roomId,
+        from: Math.min(drag.anchor, end),
+        to: Math.max(drag.anchor, end),
+      };
+      awaitingEnd = false;
+      paint();
+      return;
+    }
+
+    if (edgeDrag) {
+      if (roomId !== edgeDrag.roomId) return;
+      let from = Math.min(selection.from, selection.to);
+      let to = Math.max(selection.from, selection.to);
+      if (edgeDrag.edge === 'from') from = index; else to = index;
+      if (from === to) return;
+      if (from > to) { const tmp = from; from = to; to = tmp; }
+      if (!rangeActionable(edgeDrag.roomId, from, to)) return;
+      selection = { roomId: edgeDrag.roomId, from: from, to: to };
+      paint();
+    }
+  });
+
+  window.addEventListener('pointerup', function () {
+    if (drag) {
+      const moved = drag.moved;
+      const roomId = drag.roomId;
+      const anchor = drag.anchor;
+      drag = null;
+      if (moved) {
+        awaitingEnd = false;
+        paint();
+      } else {
+        // 没拖动 = 单击，走点选流程（保留"点两次"的习惯）
+        handleCellClick(roomId, anchor);
+      }
+      return;
+    }
+    if (edgeDrag) {
+      edgeDrag = null;
+      awaitingEnd = false;
+      paint();
+    }
+  });
+
+  window.addEventListener('pointercancel', function () {
+    if (!drag && !edgeDrag) return;
+    drag = null;
+    edgeDrag = null;
     paint();
   });
 
+  // 鼠标点击已在 pointerup 处理；这里只接键盘（detail=0）和触摸设备
+  grid.addEventListener('click', function (event) {
+    if (event.detail !== 0 && finePointer) return;
+    const cell = event.target.closest('.slot');
+    if (!cell || !board) return;
+    handleCellClick(Number(cell.dataset.room), Number(cell.dataset.index));
+  });
+
+  // ---------------------------------------------------------------
+  // ±15 分钟微调（不依赖拖动，触摸和键盘都能用）
+  // ---------------------------------------------------------------
+  if (selAdjust) {
+    selAdjust.addEventListener('click', function (event) {
+      const btn = event.target.closest('[data-adjust]');
+      if (!btn || !selection || awaitingEnd || !board) return;
+
+      const delta = Number(btn.dataset.delta);
+      let from = Math.min(selection.from, selection.to);
+      let to = Math.max(selection.from, selection.to);
+      if (btn.dataset.adjust === 'from') from += delta; else to += delta;
+
+      if (from < 0 || to >= board.slotsPerDay || from >= to) return;
+      if (!rangeActionable(selection.roomId, from, to)) {
+        toast('该方向已到边界或有占用');
+        return;
+      }
+      selection = { roomId: selection.roomId, from: from, to: to };
+      paint();
+    });
+  }
+
+  // ---------------------------------------------------------------
+  // 区间工具
+  // ---------------------------------------------------------------
   function rangeActionable(roomId, from, to) {
     const room = findRoom(roomId);
     if (!room) return false;
@@ -131,38 +369,35 @@
     return true;
   }
 
+  // 拖动时遇到不可用格就停在其前一格，不强行跨过占用
+  function clampIndex(roomId, anchor, index) {
+    const room = findRoom(roomId);
+    if (!room) return anchor;
+    const step = index >= anchor ? 1 : -1;
+    let last = anchor;
+    for (let i = anchor; i !== index + step; i += step) {
+      const slot = room.slots[i];
+      if (!slot || !slot.actionable) break;
+      last = i;
+    }
+    return last;
+  }
+
   function findRoom(roomId) {
     return board.rooms.find(function (r) { return r.roomId === roomId; });
   }
 
-  function paint() {
-    const cells = grid.querySelectorAll('.slot');
-    for (let i = 0; i < cells.length; i++) cells[i].classList.remove('is-selected');
-
-    if (!selection) {
-      selText.innerHTML = '<span class="sel-empty">尚未选择（点上表任意可预约格开始）</span>';
-      btnSubmit.disabled = true;
-      btnClear.disabled = true;
-      return;
-    }
-
-    const from = Math.min(selection.from, selection.to);
-    const to = Math.max(selection.from, selection.to);
-    for (let i = from; i <= to; i++) {
-      const cell = grid.querySelector(
-        '.slot[data-room="' + selection.roomId + '"][data-index="' + i + '"]');
-      if (cell) cell.classList.add('is-selected');
-    }
-
-    const room = findRoom(selection.roomId);
-    const units = to - from + 1;
-    selText.innerHTML =
-      '<span class="sel-time">' + escapeHtml(room ? room.roomName : '') +
-      '　' + timeAt(from) + '–' + timeAt(to + 1) + '</span>' +
-      '<span class="text-muted small ms-2">' + units + ' 个单元（' +
-      units * board.unitMinutes + ' 分钟）</span>';
-    btnSubmit.disabled = false;
-    btnClear.disabled = false;
+  // 从会议室卡片带 roomId 进入时定位一次，之后重新加载不再打扰
+  function applyFocusOnce() {
+    if (focusApplied) return;
+    focusApplied = true;
+    const target = shell.dataset.focusRoom;
+    if (!target) return;
+    const head = grid.querySelector('.room-head[data-room="' + target + '"]');
+    if (!head) return;
+    head.classList.add('is-focused');
+    head.scrollIntoView({ block: 'center', behavior: 'smooth' });
+    window.setTimeout(function () { head.classList.remove('is-focused'); }, 2400);
   }
 
   // ---------------------------------------------------------------
@@ -188,11 +423,12 @@
   // ---------------------------------------------------------------
   btnClear.addEventListener('click', function () {
     selection = null;
+    awaitingEnd = false;
     paint();
   });
 
   btnSubmit.addEventListener('click', function () {
-    if (!selection) return;
+    if (!selection || awaitingEnd) return;
     const from = Math.min(selection.from, selection.to);
     const to = Math.max(selection.from, selection.to);
 
@@ -227,6 +463,7 @@
           toast('申请已提交，等待管理员审核');
         }
         selection = null;
+        awaitingEnd = false;
         return load();
       })
       .catch(function () {
@@ -234,7 +471,7 @@
       })
       .finally(function () {
         btnSubmit.textContent = '提交预约';
-        btnSubmit.disabled = !selection;
+        btnSubmit.disabled = !selection || awaitingEnd;
       });
   });
 
@@ -251,6 +488,7 @@
         }
         board = json.data;
         render();
+        applyFocusOnce();
       })
       .catch(function () {
         showError('排期加载失败，请刷新页面');

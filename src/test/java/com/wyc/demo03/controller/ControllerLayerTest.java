@@ -410,6 +410,15 @@ class ControllerLayerTest {
     }
 
     @Test
+    @DisplayName("从会议室卡片进入排期板时带上房间定位参数")
+    void boardPageAcceptsRoomId() throws Exception {
+        mockMvc.perform(get("/reservation/board").param("roomId", "3"))
+                .andExpect(status().isOk())
+                .andExpect(view().name("board"))
+                .andExpect(model().attribute("focusRoomId", 3L));
+    }
+
+    @Test
     void roomScheduleReturnsJson() throws Exception {
         // Arrange
         when(reservationService.findScheduleByRoomAndDate(1L, java.time.LocalDate.of(2026, 8, 13)))

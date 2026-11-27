@@ -46,6 +46,7 @@ public class ProfileController {
         Long userId = (Long) session.getAttribute("Id");
         if (name == null || name.isBlank()) {
             ra.addFlashAttribute("info", "姓名不能为空！");
+            ra.addFlashAttribute("infoType", "danger");
             return "redirect:/profile";
         }
         String result = userService.updateProfile(userId, name.trim(),
@@ -55,8 +56,10 @@ public class ProfileController {
             session.setAttribute("name", name.trim());
             session.setAttribute("email", email == null ? "" : email.trim());
             ra.addFlashAttribute("info", "个人资料已更新");
+            ra.addFlashAttribute("infoType", "success");
         } else {
             ra.addFlashAttribute("info", "更新失败，请重新登录后再试！");
+            ra.addFlashAttribute("infoType", "danger");
         }
         return "redirect:/profile";
     }
@@ -74,18 +77,29 @@ public class ProfileController {
 
         if (newPassword == null || newPassword.length() < 6) {
             ra.addFlashAttribute("info", "新密码长度至少 6 位！");
+            ra.addFlashAttribute("infoType", "danger");
             return "redirect:/profile";
         }
         if (!newPassword.equals(confirmPassword)) {
             ra.addFlashAttribute("info", "两次输入的新密码不一致！");
+            ra.addFlashAttribute("infoType", "danger");
             return "redirect:/profile";
         }
 
         String result = userService.changePassword(userId, oldPassword, newPassword);
         switch (result) {
-            case "success" -> ra.addFlashAttribute("info", "密码修改成功");
-            case "wrong_password" -> ra.addFlashAttribute("info", "原密码错误！");
-            default -> ra.addFlashAttribute("info", "修改失败，请重新登录后再试！");
+            case "success" -> {
+                ra.addFlashAttribute("info", "密码修改成功");
+                ra.addFlashAttribute("infoType", "success");
+            }
+            case "wrong_password" -> {
+                ra.addFlashAttribute("info", "原密码错误！");
+                ra.addFlashAttribute("infoType", "danger");
+            }
+            default -> {
+                ra.addFlashAttribute("info", "修改失败，请重新登录后再试！");
+                ra.addFlashAttribute("infoType", "danger");
+            }
         }
         return "redirect:/profile";
     }

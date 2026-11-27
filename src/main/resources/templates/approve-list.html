@@ -38,6 +38,7 @@
             <h2 class="h5 mb-0">待审批预约</h2>
           </div>
           <div class="card-body">
+            <div class="table-responsive">
             <table
               class="table table-hover"
               th:if="${!#lists.isEmpty(approvals)}"
@@ -119,6 +120,7 @@
                 </tr>
               </tbody>
             </table>
+            </div>
             <p
               th:if="${#lists.isEmpty(approvals)}"
               class="text-center text-muted py-4"
