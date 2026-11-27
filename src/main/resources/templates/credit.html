@@ -102,7 +102,10 @@
                     <td class="small text-muted" th:text="${l['note']}"></td>
                   </tr>
                   <tr th:if="${#lists.isEmpty(logs)}">
-                    <td colspan="6" class="text-center text-muted py-4">暂无信用记录</td>
+                    <td colspan="6" class="ui-empty-cell">
+                      <i class="bi bi-inbox" aria-hidden="true"></i>
+                      暂无信用记录
+                    </td>
                   </tr>
                 </tbody>
               </table>

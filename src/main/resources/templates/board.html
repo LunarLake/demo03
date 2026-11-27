@@ -59,6 +59,9 @@
 
         <div id="boardError" class="alert alert-danger mt-2 d-none" role="alert"></div>
 
+        <!-- 约束前置提示：超容量/缺用途会挡提交，转人工只做说明 -->
+        <div id="boardHint" class="board-hint d-none" role="status" aria-live="polite"></div>
+
         <!-- 底部操作栏 -->
         <div class="board-action mt-3">
           <div class="d-flex flex-wrap align-items-end gap-2">
@@ -117,7 +120,9 @@
               />
             </div>
             <div>
-              <label class="form-label small mb-0" for="purpose">用途（低信用必填）</label>
+              <label class="form-label small mb-0" for="purpose"
+                >用途<span id="purposeReqMark" class="ui-req d-none"></span
+              ></label>
               <input
                 type="text"
                 id="purpose"

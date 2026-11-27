@@ -1,6 +1,7 @@
 package com.wyc.demo03.service;
 
 import com.wyc.demo03.domain.ReservationStatus;
+import com.wyc.demo03.domain.RuleParams;
 import com.wyc.demo03.domain.SlotSchema;
 import com.wyc.demo03.domain.SlotUnit;
 import com.wyc.demo03.entity.MeetingRoom;
@@ -9,6 +10,7 @@ import com.wyc.demo03.entity.ReservationSlot;
 import com.wyc.demo03.mapper.MeetingRoomMapper;
 import com.wyc.demo03.mapper.ReservationMapper;
 import com.wyc.demo03.mapper.ReservationSlotMapper;
+import com.wyc.demo03.rule.RuleParamsProvider;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
@@ -62,9 +64,25 @@ public class RoomBoardService {
                           List<Slot> slots) {
     }
 
+    /**
+     * 当前用户的约束快照。
+     *
+     * <p>给前端「提前告知」用，**不是规则的副本**：判定仍只发生在
+     * {@code RuleEngine}，这里只是把已经算好的阈值和结论透出去。
+     * 前端据此在点选阶段提示，避免用户填完才被打回。
+     *
+     * @param blocked 信用分低于准入线，提交必被拒
+     */
+    public record Limits(Integer creditScore, int purposeMinCredit, boolean requirePurpose,
+                         int maxContinuousMinutes, int manualReviewHeadcount,
+                         int autoApproveCredit, int midCreditMin, int midMaxDurationMinutes,
+                         Integer dailyLimit, Integer usedToday,
+                         boolean blocked, String blockReason) {
+    }
+
     public record Board(String date, String openTime, String closeTime, int unitMinutes,
                         int slotsPerDay, boolean bookable, List<String> hourMarks,
-                        List<RoomRow> rooms) {
+                        List<RoomRow> rooms, Limits limits) {
     }
 
     private final MeetingRoomMapper meetingRoomMapper;
@@ -72,6 +90,8 @@ public class RoomBoardService {
     private final ReservationSlotMapper reservationSlotMapper;
     private final SlotSchema slotSchema;
     private final Clock clock;
+    private final RuleParamsProvider ruleParamsProvider;
+    private final CreditService creditService;
 
     /**
      * 构建某日的排期板。
@@ -137,7 +157,31 @@ public class RoomBoardService {
 
         return new Board(day.toString(), slotSchema.openLabel(), slotSchema.closeLabel(),
                 slotSchema.unitMinutes(), slotSchema.slotsPerDay(), bookable,
-                hourMarks(day), rows);
+                hourMarks(day), rows, buildLimits(userId, day));
+    }
+
+    /**
+     * 当前用户约束快照。用户为空时只给默认阈值，不查信用分。
+     *
+     * <p>区分两种"不满足"：{@code blocked} 是提交必被拒（信用低于准入线），
+     * 其余阈值（连续时长、人数）只是**转人工**，前端提示口径不能混。
+     */
+    private Limits buildLimits(Long userId, LocalDate day) {
+        RuleParams p = ruleParamsProvider.current();
+        if (userId == null) {
+            return new Limits(null, p.midCreditMin(), false, p.maxContinuousMinutes(),
+                    p.manualReviewHeadcount(), p.autoApproveCredit(), p.midCreditMin(),
+                    p.midMaxDurationMinutes(), p.autoApproveDailyLimit(), null, false, null);
+        }
+        int credit = creditService.scoreOf(userId);
+        boolean blocked = credit < p.baseRuleMinCredit();
+        String reason = blocked
+                ? "信用分 " + credit + " 分，低于准入线 " + p.baseRuleMinCredit() + " 分，暂时无法预约"
+                : null;
+        return new Limits(credit, p.midCreditMin(), credit < p.midCreditMin(),
+                p.maxContinuousMinutes(), p.manualReviewHeadcount(), p.autoApproveCredit(),
+                p.midCreditMin(), p.midMaxDurationMinutes(), p.autoApproveDailyLimit(),
+                reservationMapper.countAutoPassOnDate(userId, day), blocked, reason);
     }
 
     // ====================================================================

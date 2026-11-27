@@ -72,7 +72,8 @@
                     <td class="small text-muted" th:text="${a['review_note']}"></td>
                   </tr>
                   <tr th:if="${#lists.isEmpty(appeals)}">
-                    <td colspan="6" class="text-center text-muted py-4">
+                    <td colspan="6" class="ui-empty-cell">
+                      <i class="bi bi-inbox" aria-hidden="true"></i>
                       还没有申诉记录。在「我的预约」或「信用分」页面可以对具体结果发起申诉。
                     </td>
                   </tr>

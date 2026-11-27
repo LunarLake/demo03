@@ -168,7 +168,7 @@
                       th:action="@{/reservation/cancel/{id}(id=${r.id})}"
                       method="post"
                       style="display: inline"
-                      onsubmit="return confirm('确定要取消该预约吗？');"
+                      th:attr="data-confirm=${'取消 ' + r.roomName + ' ' + #temporals.format(r['start_time'], 'MM-dd HH:mm') + ' 的预约？取消后不可恢复。'}"
                     >
                       <input type="hidden" name="_csrf" th:value="${_csrf}" />
                       <button
@@ -199,12 +199,13 @@
               </tbody>
             </table>
             </div>
-            <p
+            <div
               th:if="${#lists.isEmpty(reservationPage.records)}"
-              class="text-center text-muted py-4"
+              class="ui-empty"
             >
-              暂无预约记录
-            </p>
+              <i class="bi bi-inbox" aria-hidden="true"></i>
+              <p>暂无预约记录</p>
+            </div>
 
             <!-- 分页控件 -->
             <nav th:if="${reservationPage.pages > 1}" aria-label="预约分页">

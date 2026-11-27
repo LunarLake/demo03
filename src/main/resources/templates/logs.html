@@ -76,12 +76,13 @@
               </tbody>
             </table>
             </div>
-            <p
+            <div
               th:if="${#lists.isEmpty(logPage.records)}"
-              class="text-center text-muted py-4"
+              class="ui-empty"
             >
-              暂无日志记录
-            </p>
+              <i class="bi bi-inbox" aria-hidden="true"></i>
+              <p>暂无日志记录</p>
+            </div>
 
             <!-- 分页控件 -->
             <nav th:if="${logPage.pages > 1}" aria-label="日志分页">

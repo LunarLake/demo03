@@ -79,7 +79,10 @@
                     </td>
                   </tr>
                   <tr th:if="${#lists.isEmpty(pending)}">
-                    <td colspan="7" class="text-center text-muted py-4">没有待复核工单</td>
+                    <td colspan="7" class="ui-empty-cell">
+                      <i class="bi bi-inbox" aria-hidden="true"></i>
+                      没有待复核工单
+                    </td>
                   </tr>
                 </tbody>
               </table>
@@ -118,7 +121,10 @@
                     <td class="small text-muted" th:text="${a['review_note']}"></td>
                   </tr>
                   <tr th:if="${#lists.isEmpty(decided)}">
-                    <td colspan="6" class="text-center text-muted py-4">暂无已办结工单</td>
+                    <td colspan="6" class="ui-empty-cell">
+                      <i class="bi bi-inbox" aria-hidden="true"></i>
+                      暂无已办结工单
+                    </td>
                   </tr>
                 </tbody>
               </table>

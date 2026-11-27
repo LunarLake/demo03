@@ -121,6 +121,21 @@
   margin: 0;
 }
 
+/* 表格内的空态单元格：与 .ui-empty 视觉对齐 */
+.ui-empty-cell {
+  padding: 2rem 1rem !important;
+  text-align: center;
+  color: var(--ui-text-muted);
+  font-size: 0.875rem;
+}
+
+.ui-empty-cell i {
+  display: block;
+  font-size: 1.5rem;
+  color: var(--ui-text-faint);
+  margin-bottom: 0.25rem;
+}
+
 /* 键盘焦点统一可见（Bootstrap 只覆盖了部分控件） */
 a:focus-visible,
 .btn:focus-visible,

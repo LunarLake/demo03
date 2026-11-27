@@ -8,6 +8,7 @@ import com.wyc.demo03.entity.ReservationSlot;
 import com.wyc.demo03.mapper.MeetingRoomMapper;
 import com.wyc.demo03.mapper.ReservationMapper;
 import com.wyc.demo03.mapper.ReservationSlotMapper;
+import com.wyc.demo03.rule.RuleParamsProvider;
 import com.wyc.demo03.support.MutableClock;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -44,6 +45,7 @@ class RoomBoardServiceTest {
     @Mock private MeetingRoomMapper meetingRoomMapper;
     @Mock private ReservationMapper reservationMapper;
     @Mock private ReservationSlotMapper reservationSlotMapper;
+    @Mock private CreditService creditService;
 
     private final SlotSchema schema = SlotSchema.of(8 * 60, 22 * 60, 15, 1, 16, 7);
     private final MutableClock clock = MutableClock.at(NOW);
@@ -55,7 +57,7 @@ class RoomBoardServiceTest {
     @BeforeEach
     void setUp() {
         service = new RoomBoardService(meetingRoomMapper, reservationMapper,
-                reservationSlotMapper, schema, clock);
+                reservationSlotMapper, schema, clock, RuleParamsProvider.defaults(), creditService);
 
         roomA = new MeetingRoom();
         roomA.setId(1L);
@@ -111,6 +113,23 @@ class RoomBoardServiceTest {
         assertEquals("08:00", board.hourMarks().get(0));
         assertEquals("22:00", board.hourMarks().get(14));
         assertEquals("08:15", slotAt(board, 0, 1).label());
+    }
+
+    @Test
+    @DisplayName("约束快照：低信用标记 blocked 并要求用途，高信用放开")
+    void limitsFollowCreditBands() {
+        // 默认 mock 返回 0 分：低于准入线，应标记不可预约
+        RoomBoardService.Board low = service.build(TODAY.plusDays(1), ME);
+        assertTrue(low.limits().blocked(), "0 分低于准入线，必须标记不可预约");
+        assertTrue(low.limits().requirePurpose(), "低于中间档必须要求填用途");
+        assertTrue(low.limits().blockReason() != null && !low.limits().blockReason().isBlank(),
+                "阻断必须给出可读原因，不能只留一个 true");
+
+        when(creditService.scoreOf(ME)).thenReturn(95);
+        RoomBoardService.Board high = service.build(TODAY.plusDays(1), ME);
+        assertFalse(high.limits().blocked());
+        assertFalse(high.limits().requirePurpose(), "信用高于中间档不强制用途");
+        assertEquals(Integer.valueOf(95), high.limits().creditScore());
     }
 
     @Test
@@ -183,7 +202,7 @@ class RoomBoardServiceTest {
     void startedSlotIsNotActionable() {
         MutableClock late = MutableClock.at(TODAY.atTime(10, 1));
         RoomBoardService lateService = new RoomBoardService(meetingRoomMapper, reservationMapper,
-                reservationSlotMapper, schema, late);
+                reservationSlotMapper, schema, late, RuleParamsProvider.defaults(), creditService);
 
         RoomBoardService.Board board = lateService.build(TODAY, ME);
 
@@ -200,7 +219,7 @@ class RoomBoardServiceTest {
     void exactStartIsStillActionable() {
         MutableClock exact = MutableClock.at(TODAY.atTime(10, 0));
         RoomBoardService exactService = new RoomBoardService(meetingRoomMapper, reservationMapper,
-                reservationSlotMapper, schema, exact);
+                reservationSlotMapper, schema, exact, RuleParamsProvider.defaults(), creditService);
 
         RoomBoardService.Board board = exactService.build(TODAY, ME);
 

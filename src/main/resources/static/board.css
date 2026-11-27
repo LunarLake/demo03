@@ -307,6 +307,41 @@
   border-color: var(--board-past-border);
 }
 
+/* ---------- 约束前置提示 ---------- */
+.board-hint {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  margin-top: 0.6rem;
+  padding: 0.55rem 0.75rem;
+  border: 1px solid var(--ui-warning-border);
+  background: var(--ui-warning-soft);
+  border-radius: 0.5rem;
+  font-size: 0.82rem;
+  color: var(--ui-warning-strong);
+}
+
+.board-hint.has-block {
+  border-color: var(--ui-danger-border);
+  background: var(--ui-danger-soft);
+}
+
+.board-hint-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.4rem;
+  line-height: 1.4;
+}
+
+.board-hint-item i {
+  flex-shrink: 0;
+  margin-top: 0.1rem;
+}
+
+.board-hint-item.is-block {
+  color: var(--ui-danger-strong);
+}
+
 /* ---------- 底部操作栏 ---------- */
 .board-action {
   position: sticky;

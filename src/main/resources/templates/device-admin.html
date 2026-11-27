@@ -74,10 +74,11 @@
                 </div>
 
                 <form th:action="@{/admin/devices/{id}/test-unlock(id=${d['id']})}" method="post"
-                      class="d-inline">
+                      class="d-inline"
+                      th:attr="data-confirm=${'向 ' + d['device_name'] + ' 下发一次测试开锁？'}"
+                      data-confirm-variant="primary">
                   <input type="hidden" name="_csrf" th:value="${_csrf}" />
-                  <button type="submit" class="btn btn-sm btn-outline-primary"
-                          onclick="return confirm('向该设备下发一次测试开锁？');">
+                  <button type="submit" class="btn btn-sm btn-outline-primary">
                     测试开锁
                   </button>
                 </form>

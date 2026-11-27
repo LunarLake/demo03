@@ -109,12 +109,13 @@
               </tbody>
             </table>
             </div>
-            <p
+            <div
               th:if="${#lists.isEmpty(approvals)}"
-              class="text-center text-muted py-4"
+              class="ui-empty"
             >
-              暂无待审批预约
-            </p>
+              <i class="bi bi-inbox" aria-hidden="true"></i>
+              <p>暂无待审批预约</p>
+            </div>
           </div>
         </div>
       </section>

@@ -28,6 +28,8 @@
   const selAdjust = document.getElementById('selAdjust');
   const fromLabel = document.getElementById('fromLabel');
   const toLabel = document.getElementById('toLabel');
+  const hintBox = document.getElementById('boardHint');
+  const purposeReqMark = document.getElementById('purposeReqMark');
   const csrfMeta = document.querySelector('meta[name="_csrf"]');
   const csrf = csrfMeta ? csrfMeta.content : '';
 
@@ -123,6 +125,7 @@
     if (!selection) {
       selText.innerHTML = '<span class="sel-empty">尚未选择（拖动框选，或点两次选起止）</span>';
       toggleAdjust(false);
+      renderHint(null);
       btnSubmit.disabled = true;
       btnClear.disabled = true;
       return;
@@ -163,6 +166,8 @@
       fromLabel.textContent = timeAt(from);
       toLabel.textContent = timeAt(to + 1);
     }
+
+    syncGuards();
   }
 
   function clearPaint() {
@@ -187,6 +192,93 @@
   function toggleAdjust(show) {
     if (!selAdjust) return;
     selAdjust.classList.toggle('d-none', !show);
+  }
+
+  // ---------------------------------------------------------------
+  // 约束前置提示
+  // ---------------------------------------------------------------
+  // 阈值全部来自 board.limits（后端按当前规则版本算出），
+  // 前端只做「提示」不做「判定」，提交仍以服务端结果为准。
+  function syncGuards() {
+    if (!board || !selection || awaitingEnd) {
+      renderHint(null);
+      return;
+    }
+
+    const room = findRoom(selection.roomId);
+    const limits = board.limits || {};
+    const from = Math.min(selection.from, selection.to);
+    const to = Math.max(selection.from, selection.to);
+    const minutes = (to - from + 1) * board.unitMinutes;
+    const attendee = Number(attendeeInput.value || 1);
+
+    const blockers = [];
+    const notices = [];
+
+    // 会导致「提交被拒」的，才进 blockers
+    if (limits.blocked) {
+      blockers.push(limits.blockReason || '当前信用分不满足预约条件');
+    }
+    const overCapacity = !!(room && room.capacity && attendee > room.capacity);
+    if (overCapacity) {
+      blockers.push('该会议室最多 ' + room.capacity + ' 人，请调整人数或换一间');
+    }
+    if (limits.requirePurpose && !purposeInput.value.trim()) {
+      blockers.push('信用分 ' + limits.creditScore + ' 分，提交前需填写用途说明');
+    }
+
+    // 只会「转人工审核」的，单独提示，不拦提交
+    if (limits.maxContinuousMinutes && minutes > limits.maxContinuousMinutes) {
+      notices.push('超过 ' + limits.maxContinuousMinutes + ' 分钟，将转管理员人工审核');
+    }
+    if (limits.manualReviewHeadcount && attendee >= limits.manualReviewHeadcount) {
+      notices.push('人数达到 ' + limits.manualReviewHeadcount + ' 人，将转管理员人工审核');
+    }
+    if (limits.dailyLimit && limits.usedToday != null && limits.usedToday >= limits.dailyLimit) {
+      notices.push('今日自动通过已达 ' + limits.dailyLimit + ' 笔，本次将转人工审核');
+    }
+
+    attendeeInput.classList.toggle('is-invalid', overCapacity);
+    renderHint({ blockers: blockers, notices: notices });
+
+    btnSubmit.disabled = blockers.length > 0 || !!drag || !!edgeDrag;
+  }
+
+  function renderHint(guard) {
+    if (!hintBox) return;
+    if (!guard || (!guard.blockers.length && !guard.notices.length)) {
+      hintBox.classList.add('d-none');
+      hintBox.classList.remove('has-block');
+      hintBox.innerHTML = '';
+      return;
+    }
+
+    const parts = [];
+    guard.blockers.forEach(function (text) {
+      parts.push('<div class="board-hint-item is-block">' +
+        '<i class="bi bi-exclamation-circle" aria-hidden="true"></i>' +
+        '<span>' + escapeHtml(text) + '</span></div>');
+    });
+    guard.notices.forEach(function (text) {
+      parts.push('<div class="board-hint-item is-warn">' +
+        '<i class="bi bi-info-circle" aria-hidden="true"></i>' +
+        '<span>' + escapeHtml(text) + '</span></div>');
+    });
+    hintBox.innerHTML = parts.join('');
+    hintBox.classList.toggle('has-block', guard.blockers.length > 0);
+    hintBox.classList.remove('d-none');
+  }
+
+  function applyLimits() {
+    const limits = (board && board.limits) || {};
+    if (purposeReqMark) {
+      purposeReqMark.classList.toggle('d-none', !limits.requirePurpose);
+    }
+    if (purposeInput) {
+      purposeInput.placeholder = limits.requirePurpose
+        ? '信用分较低，用途必填'
+        : '如：小组讨论（可选）';
+    }
   }
 
   // ---------------------------------------------------------------
@@ -421,6 +513,10 @@
   // ---------------------------------------------------------------
   // 提交
   // ---------------------------------------------------------------
+  // 人数/用途变化后立刻重算提示，不必等提交
+  attendeeInput.addEventListener('input', syncGuards);
+  purposeInput.addEventListener('input', syncGuards);
+
   btnClear.addEventListener('click', function () {
     selection = null;
     awaitingEnd = false;
@@ -487,6 +583,7 @@
           return;
         }
         board = json.data;
+        applyLimits();
         render();
         applyFocusOnce();
       })

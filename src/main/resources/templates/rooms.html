@@ -87,12 +87,12 @@
                       th:action="@{/room/delete/{id}(id=${room.id})}"
                       method="post"
                       style="display: inline"
+                      th:attr="data-confirm=${'删除会议室「' + room.roomName + '」？该操作不可恢复。'}"
                     >
                       <input type="hidden" name="_csrf" th:value="${_csrf}" />
                       <button
                         type="submit"
                         class="btn btn-sm btn-outline-danger"
-                        onclick="return confirm('确定要删除该会议室吗？');"
                       >
                         删除
                       </button>
