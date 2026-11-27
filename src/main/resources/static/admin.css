@@ -2,8 +2,9 @@
     --sidebar-width: 260px;
     --sidebar-collapsed-width: 88px;
     --sidebar-bg: #1f2937;
-    --sidebar-active: #0ea5e9;
-    --content-bg: #f4f7fb;
+    /* 主色统一由 ui-tokens.css 提供，避免侧栏、按钮、排期板三个蓝 */
+    --sidebar-active: var(--ui-primary);
+    --content-bg: var(--ui-bg);
 }
 
 body {
@@ -75,7 +76,7 @@ body {
 .summary-card {
     border: 0;
     border-radius: 1rem;
-    box-shadow: 0 10px 30px rgba(15, 23, 42, 0.06);
+    box-shadow: var(--ui-shadow-card);
 }
 
 body.sidebar-collapsed .sidebar {

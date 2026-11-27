@@ -12,6 +12,23 @@
   /* 单格最小宽度：低于这个值就不再压缩，改为横向滚动 */
   --slot-min: 14px;
   --cell-h: 42px;
+
+  /* 状态色：格子与图例共用同一份，避免两处各写一套十六进制 */
+  --board-free: #ecfdf5;
+  --board-free-border: #d1fae5;
+  --board-free-hover: #a7f3d0;
+  --board-pending: #fffbeb;
+  --board-pending-border: #fde68a;
+  --board-mine: #bbf7d0;
+  --board-mine-border: #22c55e;
+  --board-mine-pending: #fef3c7;
+  --board-mine-pending-border: #f59e0b;
+  --board-occupied: #e5e7eb;
+  --board-occupied-border: #d1d5db;
+  --board-past: #f9fafb;
+  --board-past-border: #f3f4f6;
+  --board-selected: #bfdbfe;
+  --board-selected-border: #2563eb;
 }
 
 .board-scroll {
@@ -123,82 +140,82 @@
 
 /* 空闲：可选 */
 .slot.s-free {
-  background: #ecfdf5;
-  border-color: #d1fae5;
+  background: var(--board-free);
+  border-color: var(--board-free-border);
 }
 
 .slot.s-free:hover,
 .slot.s-free:focus-visible {
-  background: #a7f3d0;
-  border-color: #34d399;
+  background: var(--board-free-hover);
+  border-color: var(--ui-success);
   outline: none;
 }
 
-/* 别人的待审批：可约，但提示可能被拒 */
+/* 别人的待审批：可约，但提示可能被拒（虚线是第二重信号，不只靠颜色） */
 .slot.s-pending_only {
-  background: #fffbeb;
-  border-color: #fde68a;
+  background: var(--board-pending);
+  border-color: var(--board-pending-border);
   border-style: dashed;
 }
 
 .slot.s-pending_only:hover {
-  background: #fde68a;
+  background: var(--board-pending-border);
 }
 
 /* 我的待审批 */
 .slot.s-mine_pending {
-  background: #fef3c7;
-  border-color: #f59e0b;
+  background: var(--board-mine-pending);
+  border-color: var(--board-mine-pending-border);
 }
 
 /* 已占用（别人） */
 .slot.s-occupied {
-  background: #e5e7eb;
-  border-color: #d1d5db;
+  background: var(--board-occupied);
+  border-color: var(--board-occupied-border);
   cursor: not-allowed;
 }
 
 /* 我的有效预约 */
 .slot.s-mine {
-  background: #bbf7d0;
-  border-color: #22c55e;
+  background: var(--board-mine);
+  border-color: var(--board-mine-border);
   cursor: default;
 }
 
 /* 已过去 */
 .slot.s-past {
-  background: #f9fafb;
-  border-color: #f3f4f6;
+  background: var(--board-past);
+  border-color: var(--board-past-border);
   cursor: not-allowed;
   opacity: 0.55;
 }
 
-/* 维护中 */
+/* 维护中：斜纹，形状本身就是第二重信号 */
 .slot.s-closed {
   background: repeating-linear-gradient(
     45deg,
-    #f3f4f6,
-    #f3f4f6 4px,
-    #e5e7eb 4px,
-    #e5e7eb 8px
+    var(--board-past-border),
+    var(--board-past-border) 4px,
+    var(--board-occupied) 4px,
+    var(--board-occupied) 8px
   );
-  border-color: #e5e7eb;
+  border-color: var(--board-occupied-border);
   cursor: not-allowed;
 }
 
 /* 超出可预约天数 */
 .slot.s-too_far {
-  background: #fafafa;
-  border-color: #f3f4f6;
+  background: var(--board-past);
+  border-color: var(--board-past-border);
   cursor: not-allowed;
   opacity: 0.5;
 }
 
 /* 选中 */
 .slot.is-selected {
-  background: #bfdbfe !important;
-  border-color: #2563eb !important;
-  box-shadow: inset 0 0 0 1px #2563eb;
+  background: var(--board-selected) !important;
+  border-color: var(--board-selected-border) !important;
+  box-shadow: inset 0 0 0 1px var(--board-selected-border);
 }
 
 /* ---------- 选区两端把手 ---------- */
@@ -254,8 +271,40 @@
   width: 14px;
   height: 14px;
   border-radius: 3px;
-  border: 1px solid #d1d5db;
+  border: 1px solid var(--ui-border-strong);
   display: inline-block;
+}
+
+/* 图例与格子共用 --board-* 变量，改色只需改一处 */
+.legend-swatch.sw-free {
+  background: var(--board-free);
+  border-color: var(--board-free-border);
+}
+
+.legend-swatch.sw-pending {
+  background: var(--board-pending);
+  border-color: var(--board-pending-border);
+  border-style: dashed;
+}
+
+.legend-swatch.sw-occupied {
+  background: var(--board-occupied);
+  border-color: var(--board-occupied-border);
+}
+
+.legend-swatch.sw-mine {
+  background: var(--board-mine);
+  border-color: var(--board-mine-border);
+}
+
+.legend-swatch.sw-mine-pending {
+  background: var(--board-mine-pending);
+  border-color: var(--board-mine-pending-border);
+}
+
+.legend-swatch.sw-past {
+  background: var(--board-past);
+  border-color: var(--board-past-border);
 }
 
 /* ---------- 底部操作栏 ---------- */

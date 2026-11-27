@@ -1,0 +1,41 @@
+<!doctype html>
+<html xmlns:th="http://www.thymeleaf.org">
+  <body>
+    <!--
+      全站共用小件。用法：
+        <div th:replace="~{fragments/ui :: alert}"></div>
+      依赖 model 中的 info / infoType（success | danger | warning | 其他→info）。
+      info 为空时整块不渲染，调用方不必再写 th:if。
+    -->
+    <div
+      th:fragment="alert"
+      th:if="${info != null}"
+      class="alert alert-dismissible fade show"
+      th:classappend="${infoType == 'success'
+        ? 'alert-success'
+        : (infoType == 'danger'
+          ? 'alert-danger'
+          : (infoType == 'warning' ? 'alert-warning' : 'alert-info'))}"
+      role="alert"
+    >
+      <span th:text="${info}">提示</span>
+      <button
+        type="button"
+        class="btn-close"
+        data-bs-dismiss="alert"
+        aria-label="关闭"
+      ></button>
+    </div>
+
+    <!--
+      表格空态行。用法：
+        <tr th:replace="~{fragments/ui :: emptyRow(7, '没有待复核工单')}"></tr>
+    -->
+    <tr th:fragment="emptyRow(colspan, text)">
+      <td th:attr="colspan=${colspan}" class="text-center text-muted py-4">
+        <i class="bi bi-inbox d-block mb-1" aria-hidden="true"></i>
+        <span th:text="${text}">暂无数据</span>
+      </td>
+    </tr>
+  </body>
+</html>

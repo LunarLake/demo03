@@ -8,15 +8,7 @@
     <main class="content-area flex-grow-1">
       <th:block th:replace="~{fragments/header :: header('申诉复核')}"></th:block>
       <section class="container-fluid py-4 px-3 px-md-4">
-        <div
-          th:if="${info != null}"
-          class="alert alert-dismissible fade show"
-          th:classappend="'alert-' + ${infoType != null ? infoType : 'info'}"
-          role="alert"
-        >
-          <span th:text="${info}"></span>
-          <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
-        </div>
+        <div th:replace="~{fragments/ui :: alert}"></div>
 
         <div
           th:if="${overdue > 0}"

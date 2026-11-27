@@ -1,0 +1,131 @@
+/* =============================================================
+ * 设计基线（UI 批次 2）
+ * -------------------------------------------------------------
+ * 全站唯一的颜色来源。页面与组件只引用 --ui-* 变量，
+ * 不再各写一套十六进制值（此前 admin.css 与 board.css 是两套色板）。
+ *
+ * 色阶约定：
+ *   --ui-*-soft    背景填充
+ *   --ui-*-border  描边
+ *   --ui-*-strong  深色文字
+ *   --ui-*         主色（按钮、重点）
+ * ============================================================= */
+:root {
+  /* 主色：沿用侧边栏的高亮蓝，作为全站唯一主色 */
+  --ui-primary: #0ea5e9;
+  --ui-primary-strong: #0284c7;
+  --ui-primary-soft: #e0f2fe;
+  --ui-primary-border: #7dd3fc;
+
+  /* 语义色 */
+  --ui-success: #16a34a;
+  --ui-success-strong: #15803d;
+  --ui-success-soft: #ecfdf5;
+  --ui-success-border: #a7f3d0;
+
+  --ui-warning: #d97706;
+  --ui-warning-strong: #b45309;
+  --ui-warning-soft: #fffbeb;
+  --ui-warning-border: #fde68a;
+
+  --ui-danger: #dc2626;
+  --ui-danger-strong: #b91c1c;
+  --ui-danger-soft: #fef2f2;
+  --ui-danger-border: #fecaca;
+
+  --ui-info: #0284c7;
+  --ui-info-soft: #f0f9ff;
+
+  /* 中性色 */
+  --ui-bg: #f4f7fb;
+  --ui-surface: #ffffff;
+  --ui-surface-alt: #f8fafc;
+  --ui-border: #e5e7eb;
+  --ui-border-strong: #d1d5db;
+  --ui-text: #111827;
+  --ui-text-muted: #6b7280;
+  --ui-text-faint: #9ca3af;
+
+  /* 尺寸 */
+  --ui-radius-sm: 6px;
+  --ui-radius: 12px;
+  --ui-radius-lg: 16px;
+  --ui-shadow-card: 0 10px 30px rgba(15, 23, 42, 0.06);
+}
+
+/* -------------------------------------------------------------
+ * Bootstrap 主色对齐
+ * 默认的 #0d6efd 与侧边栏 #0ea5e9 是两个蓝，统一到前者之外的那个。
+ * 只改主色系列，success/danger 仍用 Bootstrap 语义色。
+ * ------------------------------------------------------------- */
+.btn-primary {
+  --bs-btn-bg: var(--ui-primary);
+  --bs-btn-border-color: var(--ui-primary);
+  --bs-btn-hover-bg: var(--ui-primary-strong);
+  --bs-btn-hover-border-color: var(--ui-primary-strong);
+  --bs-btn-active-bg: var(--ui-primary-strong);
+  --bs-btn-active-border-color: var(--ui-primary-strong);
+  --bs-btn-disabled-bg: var(--ui-primary);
+  --bs-btn-disabled-border-color: var(--ui-primary);
+  --bs-btn-focus-shadow-rgb: 14, 165, 233;
+}
+
+.btn-outline-primary {
+  --bs-btn-color: var(--ui-primary-strong);
+  --bs-btn-border-color: var(--ui-primary);
+  --bs-btn-hover-bg: var(--ui-primary);
+  --bs-btn-hover-border-color: var(--ui-primary);
+  --bs-btn-active-bg: var(--ui-primary-strong);
+  --bs-btn-active-border-color: var(--ui-primary-strong);
+  --bs-btn-focus-shadow-rgb: 14, 165, 233;
+}
+
+.form-control:focus,
+.form-select:focus {
+  border-color: var(--ui-primary-border);
+  box-shadow: 0 0 0 0.2rem rgba(14, 165, 233, 0.18);
+}
+
+/* -------------------------------------------------------------
+ * 通用小件
+ * ------------------------------------------------------------- */
+
+/* 必填标记：<label class="form-label">姓名<span class="ui-req"></span></label> */
+.ui-req::after {
+  content: " *";
+  color: var(--ui-danger);
+}
+
+/* 数字与时间列等宽，避免表格列宽随内容跳动 */
+.ui-num {
+  font-variant-numeric: tabular-nums;
+}
+
+/* 空态：表格里用 ui-empty-row，卡片里用 ui-empty */
+.ui-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 2rem 1rem;
+  color: var(--ui-text-muted);
+  font-size: 0.875rem;
+}
+
+.ui-empty i {
+  font-size: 1.5rem;
+  color: var(--ui-text-faint);
+}
+
+.ui-empty p {
+  margin: 0;
+}
+
+/* 键盘焦点统一可见（Bootstrap 只覆盖了部分控件） */
+a:focus-visible,
+.btn:focus-visible,
+.slot:focus-visible,
+.pagination .page-link:focus-visible {
+  outline: 2px solid var(--ui-primary-strong);
+  outline-offset: 2px;
+}
