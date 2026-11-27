@@ -13,6 +13,7 @@ import org.eclipse.paho.client.mqttv3.MqttMessage;
 import org.eclipse.paho.client.mqttv3.persist.MemoryPersistence;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.context.event.ApplicationReadyEvent;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.context.event.EventListener;
 import org.springframework.stereotype.Component;
 
@@ -57,6 +58,9 @@ public class PahoMqttGateway implements MqttGateway {
     private static final long[] BACKOFF_MS = {1_000, 2_000, 4_000, 8_000, 15_000, 30_000};
 
     private final MqttProperties properties;
+
+    /** 连接就绪事件发布器：连上/重连后通知关心方立刻补发快照。 */
+    private final ApplicationEventPublisher events;
 
     /** 已登记的订阅意图；连接/重连后据此恢复。 */
     private final Map<String, Subscription> subscriptions = new LinkedHashMap<>();
@@ -210,6 +214,8 @@ public class PahoMqttGateway implements MqttGateway {
             public void connectComplete(boolean reconnect, String serverURI) {
                 log.info("MQTT {}：{}", reconnect ? "自动重连成功" : "连接建立", serverURI);
                 restoreSubscriptions(reconnect);
+                // 首连与重连都要通知：重连时 Broker 可能已丢光 retained 消息
+                events.publishEvent(new MqttConnectedEvent(serverURI, reconnect));
             }
 
             @Override

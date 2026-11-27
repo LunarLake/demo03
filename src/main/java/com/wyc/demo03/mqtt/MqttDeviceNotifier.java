@@ -89,6 +89,12 @@ public class MqttDeviceNotifier implements DeviceNotifier {
 
     @Override
     public void refreshAll() {
+        // 未连接时直接返回：启动瞬间调度器会先跑一轮，那时 MQTT 还没连上，
+        // 每台设备都会抛一次 "MQTT 未连接" 并打一整段栈，看着像故障其实必然发生。
+        // 真正的补发由 MqttSnapshotRefreshListener 在连接建立后触发。
+        if (!gateway.isConnected()) {
+            return;
+        }
         for (Device device : deviceMapper.findBound()) {
             try {
                 refresh(device.getRoomId());

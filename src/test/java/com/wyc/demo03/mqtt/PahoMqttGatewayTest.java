@@ -62,7 +62,7 @@ class PahoMqttGatewayTest {
     void subscriptionBeforeConnectIsAppliedOnConnect() throws Exception {
         try (MockedConstruction<MqttClient> mocked =
                      mockConstruction(MqttClient.class, connected())) {
-            PahoMqttGateway gateway = new PahoMqttGateway(props());
+            PahoMqttGateway gateway = new PahoMqttGateway(props(), event -> { });
 
             gateway.subscribe(TOPIC, 1, payload -> { });
 
@@ -82,7 +82,7 @@ class PahoMqttGatewayTest {
     void subscriptionsRestoredAfterReconnect() throws Exception {
         try (MockedConstruction<MqttClient> mocked =
                      mockConstruction(MqttClient.class, connected())) {
-            PahoMqttGateway gateway = new PahoMqttGateway(props());
+            PahoMqttGateway gateway = new PahoMqttGateway(props(), event -> { });
             List<String> received = new ArrayList<>();
             gateway.subscribe(TOPIC, 1, received::add);
             gateway.connectWithRetry();
@@ -118,7 +118,7 @@ class PahoMqttGatewayTest {
                         .when(mock).connect(any(MqttConnectOptions.class));
             }
         })) {
-            PahoMqttGateway gateway = new PahoMqttGateway(props());
+            PahoMqttGateway gateway = new PahoMqttGateway(props(), event -> { });
             gateway.subscribe(TOPIC, 1, payload -> { });
 
             gateway.connectWithRetry();
@@ -133,7 +133,7 @@ class PahoMqttGatewayTest {
     @Test
     @DisplayName("退避阶梯封顶：1→2→4→8→15→30 秒，之后维持 30 秒")
     void backoffIsCapped() {
-        PahoMqttGateway gateway = new PahoMqttGateway(props());
+        PahoMqttGateway gateway = new PahoMqttGateway(props(), event -> { });
 
         assertEquals(1_000, gateway.backoffOf(1));
         assertEquals(2_000, gateway.backoffOf(2));
@@ -153,12 +153,58 @@ class PahoMqttGatewayTest {
             doThrow(new MqttException(MqttException.REASON_CODE_CONNECTION_LOST))
                     .when(mock).connect(any(MqttConnectOptions.class));
         })) {
-            PahoMqttGateway gateway = new PahoMqttGateway(props());
+            PahoMqttGateway gateway = new PahoMqttGateway(props(), event -> { });
             gateway.close();
 
             gateway.connectAsync();
 
             assertTrue(mocked.constructed().isEmpty(), "关闭后不应再发起连接");
+        }
+    }
+
+    @Test
+    @DisplayName("首次连接成功后发出 MqttConnectedEvent：上层据此立刻补发 retained 快照")
+    void publishesConnectedEventOnConnect() throws Exception {
+        List<MqttConnectedEvent> events = new ArrayList<>();
+
+        try (MockedConstruction<MqttClient> mocked =
+                     mockConstruction(MqttClient.class, connected())) {
+            PahoMqttGateway gateway = new PahoMqttGateway(props(), e -> events.add((MqttConnectedEvent) e));
+            gateway.connectWithRetry();
+
+            MqttClient client = mocked.constructed().get(0);
+            ArgumentCaptor<MqttCallbackExtended> cb =
+                    ArgumentCaptor.forClass(MqttCallbackExtended.class);
+            verify(client).setCallback(cb.capture());
+
+            // 真实 Paho 在收到 CONNACK 后会回调 connectComplete；mock 不会，手动触发
+            cb.getValue().connectComplete(false, "tcp://127.0.0.1:1883");
+
+            assertEquals(1, events.size(), "连接成功必须发一次事件，否则后端重启后有 60 秒没有快照");
+            assertTrue(events.get(0).serverUri().contains("127.0.0.1"), "事件要带上 Broker 地址");
+            assertEquals(false, events.get(0).reconnect(), "首次连接不是重连");
+        }
+    }
+
+    @Test
+    @DisplayName("断线重连成功也要发事件：Broker 重启会丢光 retained 消息")
+    void publishesConnectedEventOnReconnect() throws Exception {
+        List<MqttConnectedEvent> events = new ArrayList<>();
+
+        try (MockedConstruction<MqttClient> mocked =
+                     mockConstruction(MqttClient.class, connected())) {
+            PahoMqttGateway gateway = new PahoMqttGateway(props(), e -> events.add((MqttConnectedEvent) e));
+            gateway.connectWithRetry();
+
+            MqttClient client = mocked.constructed().get(0);
+            ArgumentCaptor<MqttCallbackExtended> cb =
+                    ArgumentCaptor.forClass(MqttCallbackExtended.class);
+            verify(client).setCallback(cb.capture());
+
+            cb.getValue().connectComplete(true, "tcp://127.0.0.1:1883");
+
+            assertEquals(1, events.size(), "重连也要发，retained 在 Broker 重启后已丢失");
+            assertEquals(true, events.get(0).reconnect());
         }
     }
 }

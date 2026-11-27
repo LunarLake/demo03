@@ -4,6 +4,10 @@
 > 本文是项目总览；施工细节见 [`docs/重构改造计划.md`](docs/重构改造计划.md)，
 > 验收对照见 [`docs/acceptance.md`](docs/acceptance.md)。
 
+**当前状态（2026-11-27）**：软件侧 P0–P8 全部完成，单元 + 集成测试 **327 条全绿**；
+固件侧已实现并在真机跑通**完整链路**——网页签到 → 服务端下发 → 设备验签 → 开锁脉冲 →
+回执 `OK` → 命令置 `ACKED`，往返 **252 ms**。
+
 ## 1. 项目概述
 
 ### 1.1 解决什么问题
@@ -57,10 +61,10 @@
 Spring Boot 3.5 ── MySQL 8.0（16 张表）
         │
         ▼  MQTT（Eclipse Paho）
-   Mosquitto ──► STM32F103C8T6 + ESP8266
-                  ├─ SSD1306 显示签到码/剩余时间
-                  ├─ 蜂鸣器
-                  └─ 12V 电控柜锁
+   Mosquitto ──► STM32F103ZET6 + ESP8266（ATK-MW8266D）
+                  ├─ SSD1306 128×64：状态 / 剩余时间 / 签到码
+                  ├─ 板载蜂鸣器（PB8）
+                  └─ PB0 → 12V 电控柜锁（驱动电路待接）
 ```
 
 | 层次 | 技术 |
@@ -68,7 +72,14 @@ Spring Boot 3.5 ── MySQL 8.0（16 张表）
 | Web | Spring MVC + Thymeleaf、Bootstrap 5、原生 JS（无前端框架） |
 | 持久化 | MyBatis-Plus 3.5.15 + MySQL 8.0 |
 | 设备 | MQTT 3.1.1（QoS1）、HMAC-SHA256 信封 |
+| 固件 | 裸机 C（无 RTOS）、STM32 HAL、自写 MQTT 编解码、1KB 显存差量刷屏 |
 | 其他 | Hutool（BCrypt / HMAC）、ECharts（管理端看板） |
+
+**设备侧三个不寻常的设计**（都在固件里，见 4.6.1）：
+
+- **不依赖 NTP**：设备时间只取自**验签通过的**签名快照，且只允许向前校准。
+- **不信任网络**：每条指令过五关——设备号 → HMAC → 有效期 → 去重 → 与屏上预约绑定。
+- **失败也回执**：拒绝时同样回 `ACK` 带 `resultCode=ERR_xxx`，服务端才能区分"没执行"和"消息丢了"。
 
 ### 3.1 目录结构
 
@@ -87,8 +98,20 @@ src/main/java/com/wyc/demo03/
 
 sql/               schema-v2.sql / migrate-v1-to-v2.sql / init-demo.sql
 deploy/mosquitto/  mosquitto.conf（Docker）+ mosquitto-windows.conf（原生）+ ACL + 部署说明
-docs/              施工图、验收对照、测试盘点
+deploy/start-demo.ps1  一键启动（IP 自检 + Broker + 后端）
+docs/              施工图、验收对照、测试盘点、系统使用说明书
 scripts/           mqtt-e2e.sh（门禁链路证据收集）
+```
+
+固件是**独立仓库**（裸机工程不适合和 Maven 项目混在一起）：
+
+```
+D:\code\WebHardware\Overall
+├─ App/         app_main / app_esp / app_net / app_mqtt / app_proto / app_display …
+├─ MDK-ARM/     Keil 工程（Overall.uvprojx）+ 启动文件
+├─ OLED/        SSD1306 驱动（含按页批量写）
+├─ Tools/       fw.py（编译 + 烧录 + 抓串口）
+└─ Hardware/    CubeMX 工程
 ```
 
 ### 3.2 数据库（16 张表）
@@ -261,6 +284,43 @@ Broker 地址与账号的默认值都写在 `application-mqtt-broker.yml` 里，
 > 签名密钥和 Broker 账号密码是**两套凭据**，互不影响。`ERR_HMAC` 是前者的问题，
 > 连不上 1883 是后者的问题，排障别混。上正式环境时两套都要换掉。
 
+### 4.6.1 固件（真机）
+
+代码在独立仓库 `D:\code\WebHardware\Overall`，接线表见
+[`docs/硬件接线与上电自检.md`](docs/硬件接线与上电自检.md)，完整操作见
+[`docs/系统使用说明书.md`](docs/系统使用说明书.md)。
+
+**编译烧录**（Keil）：
+
+1. 打开 `MDK-ARM/Overall.uvprojx`
+2. `F7` 编译（应 `0 Error(s)`）、`F8` 烧录（应 `Verify OK`）
+3. 首次设一次：`Options for Target → Utilities → Settings` 勾 **Reset and Run**，关对话框后 `Ctrl+S`
+
+命令行等价物（需要带 pyserial 的 Python）：
+
+```powershell
+cd D:\code\WebHardware\Overall\Tools
+python fw.py cycle 30     # 编译 + 烧录 + 抓 30 秒串口
+```
+
+**烧完的正常串口**（上电到就绪约 9 秒）：
+
+```
+[BOOT] HMAC selftest ... PASS
+[ESP ] state -> AT / WIFI / TCP
+[NET ] CONNACK ok
+[NET ] time synced: 2026-11-27T21:40:32
+[NET ] SCREEN status=FREE
+[NET ] READY
+[ALIVE] t=15s esp=READY net=READY
+```
+
+**屏幕六态**：`NO LINK`（没连上）/ `WAITING`（连上但没快照）/ `FREE` / `RESERVED`
+/ `CHECK IN`（窗口内，显示 4 位码）/ `IN USE` / `ENDING`（最后 5 分钟）。
+
+> 固件里的 `APP_BROKER_HOST` 是**编译期常量**。热点重连后电脑 IP 变了就必须改
+> `App/app_config.h` 并重新烧录——这是现场最容易翻车的一步。
+
 ### 4.7 演示前复位
 
 ```bash
@@ -318,20 +378,28 @@ mysql -u root -p db02 < sql/init-demo.sql
 
 | 文档 | 内容 |
 |---|---|
+| [`docs/系统使用说明书.md`](docs/系统使用说明书.md) | **真机版总入口**：硬件连线、各服务启停、Keil/IntelliJ 启动、演示动线、排障 |
+| [`docs/硬件接线与上电自检.md`](docs/硬件接线与上电自检.md) | 接线表、通电前静态检查、分段上电自检 |
+| [`docs/固件实施计划.md`](docs/固件实施计划.md) | 固件模块划分、实测指标、六个真坑与修法、已知限制 |
+| [`docs/CubeMX配置单.md`](docs/CubeMX配置单.md) | 引脚与外设配置（含每个参数的理由） |
 | [`docs/重构改造计划.md`](docs/重构改造计划.md) | 施工图：冲突清单、数据模型、状态机、分阶段任务与**实际进度记录** |
 | [`docs/acceptance.md`](docs/acceptance.md) | AC-01 ~ AC-30 逐条对照与手工验收清单 |
-| [`docs/demo.md`](docs/demo.md) | 5 分钟答辩演示脚本、兜底方案与预备问答 |
+| [`docs/demo.md`](docs/demo.md) | 5 分钟答辩演示脚本（纯软件）、兜底方案与预备问答 |
 | [`docs/小组分工.md`](docs/小组分工.md) | 团队分工、阶段任务与贡献度口径 |
 | [`deploy/mosquitto/README.md`](deploy/mosquitto/README.md) | MQTT 部署、主题约定、设备侧五步校验 |
 | [`sql/schema-v2.sql`](sql/schema-v2.sql) | 建表 + 演示数据 |
 
 ## 8. 已知限制
 
-- **Mosquitto 链路已在本机实测走通**（2026-11-24）：Broker 启动、连接订阅、retained 快照、
-  心跳鉴权、回执结算、越权拦截均验证通过；HMAC 规范用 Python 独立复现，与后端签名逐字节一致。
-  复现步骤见 [`deploy/mosquitto/README.md`](deploy/mosquitto/README.md)。
-- **真机（STM32F103 + ESP8266）尚未接入**：`DeviceSimulator` 与真机执行同一套五步校验，
-  但物理开锁、断电重连、时钟漂移等只有在硬件上才能验。硬件到货后按 4.6 走一遍形态 C。
+- **真机已接入并跑通全链路**（2026-11-27）：ESP8266 联网 → MQTT 收发 → 五步校验 →
+  开锁脉冲 → 回执 → 服务端置 `ACKED`。日志与数据库证据见
+  [`docs/固件实施计划.md`](docs/固件实施计划.md) §7。
+- **12V 电控锁尚未接线**：`PB0` 只在万用表上确认过 3 秒高电平，线圈与驱动电路未接，
+  因此"门真的开了"这一步还没有物理证据。
+- **`ERR_BIND` 只有正向路径验证过**：跨预约开锁（屏上挂 A、指令带 B）可以造一条手工指令验证，
+  尚未执行。
+- **门禁屏是英文**：中文需要按 `codetab.h` 的 `F16x16` 索引逐字取模，容易错位，暂缓。
 - 超时占用与违规使用靠管理员手工认定，一期无传感器。
 - 审计日志只保留 7 天，超过期限的判定依据不再可查（因此判定信息写在业务表上）。
-- `PermissionInterceptor`（权限点模型）尚未落地，管理路由仍按角色拦截。
+- `PermissionInterceptor`（权限点模型）尚未落地，管理路由仍按角色拦截；
+  审批页目前**仅 ADMIN 可进**（教师账号会重定向），与"教师审批"的表述尚未统一。
