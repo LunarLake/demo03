@@ -408,7 +408,10 @@ INSERT INTO t_user (username, password, name, role, email) VALUES
 ('student02', '$2a$10$y/Ip6RS199BMZuBzTbJNlOKj0v/HaL27JsO6FsjJzXcQF1Z/Px.2K', '学生二', 'STUDENT', 'student02@example.com'),
 ('student03', '$2a$10$y/Ip6RS199BMZuBzTbJNlOKj0v/HaL27JsO6FsjJzXcQF1Z/Px.2K', '学生三', 'STUDENT', 'student03@example.com'),
 ('teacher01', '$2a$10$y/Ip6RS199BMZuBzTbJNlOKj0v/HaL27JsO6FsjJzXcQF1Z/Px.2K', '教师一', 'TEACHER', 'teacher01@example.com'),
-('admin01',   '$2a$10$y/Ip6RS199BMZuBzTbJNlOKj0v/HaL27JsO6FsjJzXcQF1Z/Px.2K', '管理员', 'ADMIN',   'admin01@example.com');
+('admin01',   '$2a$10$y/Ip6RS199BMZuBzTbJNlOKj0v/HaL27JsO6FsjJzXcQF1Z/Px.2K', '管理员一', 'ADMIN',   'admin01@example.com'),
+-- 第二个管理员是**必须的**：申诉复核要求复核人不能是原审核人（自审拦截），
+-- 只有一个管理员时，管理员自己名下产生的申诉就永远无法复核。
+('admin02',   '$2a$10$y/Ip6RS199BMZuBzTbJNlOKj0v/HaL27JsO6FsjJzXcQF1Z/Px.2K', '管理员二', 'ADMIN',   'admin02@example.com');
 
 -- 信用账户：初始 100 分
 INSERT INTO t_credit_account (user_id, score, updated_at)
@@ -435,7 +438,7 @@ WHERE v.version_no = 1;
 
 -- 设备：2 台虚拟设备，与房间绑定（真机到货后改 secret 与 device_code 即可）
 INSERT INTO t_device (device_code, room_id, secret, firmware_ver, online) VALUES
-('ROOM-A-01', 1, 'demo-secret-room-a-please-change', 'sim-1.0', 0),
+('ROOM-A-01', 1, 'demo-secret-room-a-please-change', 'fw0.1', 0),
 ('ROOM-B-01', 2, 'demo-secret-room-b-please-change', 'sim-1.0', 0);
 
 -- =============================================================
