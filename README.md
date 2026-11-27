@@ -379,18 +379,20 @@ mysql -u root -p db02 < sql/init-demo.sql
 
 ## 7. 文档索引
 
-| 文档 | 内容 |
-|---|---|
-| [`docs/系统使用说明书.md`](docs/系统使用说明书.md) | **真机版总入口**：硬件连线、各服务启停、Keil/IntelliJ 启动、演示动线、排障 |
-| [`docs/硬件接线与上电自检.md`](docs/硬件接线与上电自检.md) | 接线表、通电前静态检查、分段上电自检 |
-| [`docs/固件实施计划.md`](docs/固件实施计划.md) | 固件模块划分、实测指标、六个真坑与修法、已知限制 |
-| [`docs/CubeMX配置单.md`](docs/CubeMX配置单.md) | 引脚与外设配置（含每个参数的理由） |
-| [`docs/重构改造计划.md`](docs/重构改造计划.md) | 施工图：冲突清单、数据模型、状态机、分阶段任务与**实际进度记录** |
-| [`docs/acceptance.md`](docs/acceptance.md) | AC-01 ~ AC-30 逐条对照与手工验收清单 |
-| [`docs/demo.md`](docs/demo.md) | 5 分钟答辩演示脚本（纯软件）、兜底方案与预备问答 |
-| [`docs/小组分工.md`](docs/小组分工.md) | 团队分工、阶段任务与贡献度口径 |
-| [`deploy/mosquitto/README.md`](deploy/mosquitto/README.md) | MQTT 部署、主题约定、设备侧五步校验 |
-| [`sql/schema-v2.sql`](sql/schema-v2.sql) | 建表 + 演示数据 |
+| 文档 | 状态 | 内容 |
+|---|---|---|
+| [`docs/系统使用说明书.md`](docs/系统使用说明书.md) | ✅ 主入口 | 硬件连线、Mosquitto 安装、各服务启停、Keil/IntelliJ 启动、演示动线、排障 |
+| [`docs/硬件接线与上电自检.md`](docs/硬件接线与上电自检.md) | ✅ | 接线表、通电前静态检查、分段上电自检 |
+| [`docs/固件实施计划.md`](docs/固件实施计划.md) | ✅ | 固件模块划分、实测指标、六个真坑与修法、已知限制 |
+| [`docs/CubeMX配置单.md`](docs/CubeMX配置单.md) | ✅ | 引脚与外设配置（含每个参数的理由） |
+| [`docs/acceptance.md`](docs/acceptance.md) | ✅ | AC-01 ~ AC-30 逐条对照与手工验收清单 |
+| [`docs/demo.md`](docs/demo.md) | ✅ 无板子时 | 5 分钟答辩演示脚本（纯软件）、兜底方案与预备问答 |
+| [`docs/小组分工.md`](docs/小组分工.md) | ✅ | 团队分工、阶段任务与贡献度口径 |
+| [`deploy/mosquitto/README.md`](deploy/mosquitto/README.md) | ✅ | MQTT 部署、主题约定、设备侧五步校验 |
+| [`docs/重构改造计划.md`](docs/重构改造计划.md) | 📦 已归档 | 施工过程记录（冲突清单、数据模型、状态机、分阶段任务），不再是操作依据 |
+
+> `sql/` 下只有两个脚本：`schema-v2.sql`（全新建库）、`init-demo.sql`（演示前清业务数据）。
+> v1 时代的建表与迁移脚本已于 2026-11-27 清理。
 
 ## 8. 已知限制
 

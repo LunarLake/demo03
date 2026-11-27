@@ -1,5 +1,7 @@
 # CubeMX 配置单 · 门禁终端固件
 
+> **文档状态**：✅ 有效 · 配置已落到 `Hardware/Overall.ioc`
+
 > 适用：智慧研讨室门禁终端（ROOM-A-01 / ROOM-B-01）  
 > 目标芯片：**STM32F103ZET6**（LQFP144，512KB Flash / 64KB RAM）  
 > 开发板：正点原子 ZET6 系列（精英版 / 战舰版），板载 USB 串口与 8266 模块插座  
