@@ -73,6 +73,17 @@ public class RuleEngine {
 
         RuleParams p = params.current();
 
+        int credit = ctx.creditScore();
+        int minutes = ctx.durationMinutes(slotSchema.unitMinutes());
+
+        // ---- 附加规则里最严的一条先判：低信用且未填用途，直接拒绝 ----
+        // 必须排在下面两条 FORCE_MANUAL 之前。否则"人数达阈值 + 空用途"会先命中 E01 转人工，
+        // 管理员批准后就产生一笔无用途的已通过预约，硬规则被静默绕过。
+        if (credit < p.midCreditMin() && !ctx.hasPurpose()) {
+            return RuleOutcome.reject(RULE_PURPOSE_REQUIRED,
+                    "信用分低于 " + p.midCreditMin() + " 分，提交申请时必须填写用途说明");
+        }
+
         // ---- 第二层：强制转人工（先于自动通过） ----
         if (ctx.attendeeCount() >= p.manualReviewHeadcount()) {
             return RuleOutcome.forceManual(RULE_HEADCOUNT,
@@ -84,8 +95,6 @@ public class RuleEngine {
         }
 
         // ---- 信用分档次 ----
-        int credit = ctx.creditScore();
-        int minutes = ctx.durationMinutes(slotSchema.unitMinutes());
         // 连续占用上限先于信用分档判断：它是管理员配置的硬上限，无论信用多高都不得自动放过
         boolean withinContinuous = minutes <= p.maxContinuousMinutes();
 
@@ -110,10 +119,6 @@ public class RuleEngine {
             }
             return RuleOutcome.forceManual(RULE_CREDIT_MID_LONG,
                     "信用分 " + credit + " 分，超过 " + p.midMaxDurationMinutes() + " 分钟的申请需人工审核");
-        }
-        if (!ctx.hasPurpose()) {
-            return RuleOutcome.reject(RULE_PURPOSE_REQUIRED,
-                    "信用分低于 " + p.midCreditMin() + " 分，提交申请时必须填写用途说明");
         }
         return RuleOutcome.forceManual(RULE_CREDIT_LOW,
                 "信用分 " + credit + " 分，需管理员人工审核");

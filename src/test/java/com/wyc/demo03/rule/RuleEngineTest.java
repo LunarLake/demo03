@@ -77,4 +77,44 @@ class RuleEngineTest {
         assertEquals(RuleOutcome.Kind.AUTO_APPROVE, exactly.kind());
         assertTrue(exactly.message().contains("自动通过"));
     }
+
+    /** 带人数/用途的上下文，用于验证规则之间的优先级。 */
+    private RuleContext ctx(int credit, int units, int attendee, String purpose) {
+        return new RuleContext("STUDENT", true, SlotCheck.ok(), false,
+                attendee, 6, purpose, credit, false, 0, units);
+    }
+
+    @Test
+    @DisplayName("最严的规则先判：低信用 + 空用途 + 人数达阈值，必须拒绝而不是转人工")
+    void strictestRuleWinsOverManualShortcut() {
+        RuleEngine engine = engine(params(240));
+
+        // 人数 5 会命中 E01（转人工），但"低信用必须填用途"是更严的硬规则，不能被抢先
+        RuleOutcome outcome = engine.evaluate(ctx(65, 4, 5, null));
+
+        assertEquals(RuleOutcome.Kind.REJECT, outcome.kind(),
+                "空用途被 E01 抢先转人工后，管理员批准即产生一笔无用途的已通过预约");
+        assertEquals(RuleEngine.RULE_PURPOSE_REQUIRED, outcome.firstRuleCode());
+    }
+
+    @Test
+    @DisplayName("低信用但已填用途：仍然转人工，不会被误拒")
+    void lowCreditWithPurposeGoesManual() {
+        RuleEngine engine = engine(params(240));
+
+        RuleOutcome outcome = engine.evaluate(ctx(65, 4, 2, "小组讨论"));
+
+        assertEquals(RuleOutcome.Kind.FORCE_MANUAL, outcome.kind());
+        assertEquals(RuleEngine.RULE_CREDIT_LOW, outcome.firstRuleCode());
+    }
+
+    @Test
+    @DisplayName("高信用不受用途规则影响：空用途仍可自动通过")
+    void highCreditIgnoresPurposeRule() {
+        RuleEngine engine = engine(params(240));
+
+        RuleOutcome outcome = engine.evaluate(ctx(95, 4, 2, null));
+
+        assertEquals(RuleOutcome.Kind.AUTO_APPROVE, outcome.kind());
+    }
 }

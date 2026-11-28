@@ -1,6 +1,8 @@
 package com.wyc.demo03.device;
 
+import com.wyc.demo03.entity.MeetingRoom;
 import com.wyc.demo03.entity.Reservation;
+import com.wyc.demo03.mapper.MeetingRoomMapper;
 import com.wyc.demo03.mapper.ReservationMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -30,6 +32,7 @@ import java.time.LocalDateTime;
 public class LogDeviceNotifier implements DeviceNotifier {
 
     private final ReservationMapper reservationMapper;
+    private final MeetingRoomMapper meetingRoomMapper;
     private final ScreenPayloadBuilder screenPayloadBuilder;
     private final Clock clock;
 
@@ -47,10 +50,25 @@ public class LogDeviceNotifier implements DeviceNotifier {
         log.info("[模拟屏幕] room={} {}", roomId, screenPayloadBuilder.build(current, now));
     }
 
+    /**
+     * 每分钟一轮，等价于"真机屏幕按当前时刻重画"。
+     *
+     * <p><b>这里必须真的逐房间算一遍</b>：签到码只在
+     * {@code [开始, 开始+5min)} 内上屏，而"进入签到窗口"不对应任何业务事件
+     * （审批一定在开始前、签到一定在开始后），所以没有这一轮，无设备时码永远不会出现。
+     *
+     * <p>空闲房间不打印，避免每分钟刷一屏 {@code 空闲}。
+     */
     @Override
     public void refreshAll() {
-        // 没有真实设备可刷，日志版只在 refresh(roomId) 里体现；这里保持静默避免刷屏
-        log.debug("[模拟屏幕] 按当前时刻刷新全部房间");
+        for (MeetingRoom room : meetingRoomMapper.selectList(null)) {
+            LocalDateTime now = LocalDateTime.now(clock);
+            Reservation current = reservationMapper.findCurrentForRoom(room.getId(), now);
+            if (current == null) {
+                continue;
+            }
+            log.info("[模拟屏幕] room={} {}", room.getId(), screenPayloadBuilder.build(current, now));
+        }
     }
 
     @Override
