@@ -48,6 +48,7 @@ class AppealServiceImplTest {
     @Mock private ReservationMapper reservationMapper;
     @Mock private CreditLogMapper creditLogMapper;
     @Mock private CreditService creditService;
+    @Mock private com.wyc.demo03.service.UserService userService;
     @Mock private AuditLogMapper auditLogMapper;
 
     private final MutableClock clock = MutableClock.at(T0);
@@ -56,7 +57,7 @@ class AppealServiceImplTest {
     @BeforeEach
     void setUp() {
         service = new AppealServiceImpl(appealMapper, reservationMapper, creditLogMapper,
-                creditService, auditLogMapper, clock);
+                creditService, userService, auditLogMapper, clock);
     }
 
     private Reservation reservation(Long ownerId, int statusCode) {
@@ -217,6 +218,31 @@ class AppealServiceImplTest {
 
         IllegalStateException ex = assertThrows(IllegalStateException.class,
                 () -> service.decide(100L, REVIEWER, Appeal.Status.UPHELD, "维持"));
+        assertTrue(ex.getMessage().contains("原审核人"));
+        verify(appealMapper, never()).decideIfSubmitted(anyLong(), anyString(), anyLong(), anyString(), any());
+    }
+
+    @Test
+    @DisplayName("R06 认定扣分的管理员不能复核针对该扣分的申诉")
+    void rejectsOperatorOfCreditDeduction() {
+        when(appealMapper.selectById(100L)).thenReturn(submitted(APPLICANT, "CREDIT", 88L));
+
+        CreditLog original = new CreditLog();
+        original.setId(88L);
+        original.setUserId(APPLICANT);
+        original.setReservationId(42L);
+        original.setOperator("admin01");
+        when(creditLogMapper.selectById(88L)).thenReturn(original);
+
+        com.wyc.demo03.entity.User reviewer = new com.wyc.demo03.entity.User();
+        reviewer.setId(REVIEWER);
+        reviewer.setUsername("admin01");
+        when(userService.getById(REVIEWER)).thenReturn(reviewer);
+
+        // 该预约是自动通过的，approved_by 为空 —— 只查 approved_by 会把这条放行，
+        // 所以这里刻意不给 reservationMapper 打桩：命中 operator 就必须提前拦住。
+        IllegalStateException ex = assertThrows(IllegalStateException.class,
+                () -> service.decide(100L, REVIEWER, Appeal.Status.REVOKED, "同意撤销"));
         assertTrue(ex.getMessage().contains("原审核人"));
         verify(appealMapper, never()).decideIfSubmitted(anyLong(), anyString(), anyLong(), anyString(), any());
     }

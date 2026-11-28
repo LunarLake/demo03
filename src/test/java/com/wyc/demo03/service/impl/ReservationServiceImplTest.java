@@ -653,14 +653,32 @@ class ReservationServiceImplTest {
         }
 
         @Test
-        @DisplayName("并发抢占失败 → already_checked_in，不写签到记录")
+        @DisplayName("并发抢占失败 → 回查后确实已签到，才说 already_checked_in")
         void losesCheckInRace() {
             clock.set(T0);
-            stubExisting(approvedAt(T0.minusMinutes(1)));
+            // 第一次读用于前置校验（APPROVED），抢占失败后回查时对方已改成 CHECKED_IN
+            Reservation second = approvedAt(T0.minusMinutes(1));
+            second.setReservationStatus(ReservationStatus.CHECKED_IN.code());
+            when(reservationMapper.selectById(1L)).thenReturn(approvedAt(T0.minusMinutes(1)), second);
             when(checkinCodeService.verify(1L, "1234")).thenReturn(true);
             when(reservationMapper.transit(anyLong(), anyInt(), anyInt(), any(), any(), any())).thenReturn(0);
 
             assertEquals("already_checked_in", service.checkIn(1L, 7L, "1234", "127.0.0.1"));
+            verify(attendanceRecordService, never()).save(any());
+        }
+
+        @Test
+        @DisplayName("抢占失败但已被调度器释放 → 必须说已截止，不能谎称已签到")
+        void losesCheckInRaceToTimeout() {
+            clock.set(T0);
+            Reservation released = approvedAt(T0.minusMinutes(1));
+            released.setReservationStatus(ReservationStatus.TIMEOUT_RELEASED.code());
+            when(reservationMapper.selectById(1L)).thenReturn(approvedAt(T0.minusMinutes(1)), released);
+            when(checkinCodeService.verify(1L, "1234")).thenReturn(true);
+            when(reservationMapper.transit(anyLong(), anyInt(), anyInt(), any(), any(), any())).thenReturn(0);
+
+            assertEquals("expired", service.checkIn(1L, 7L, "1234", "127.0.0.1"),
+                    "用户以为签上了、实际被记爽约，是最坏的一种误导");
             verify(attendanceRecordService, never()).save(any());
         }
 

@@ -393,7 +393,17 @@ public class ReservationServiceImpl extends ServiceImpl<ReservationMapper, Reser
         int moved = baseMapper.transit(reservationId, ReservationStatus.APPROVED.code(),
                 ReservationStatus.CHECKED_IN.code(), null, null, null);
         if (moved != 1) {
-            return "already_checked_in";
+            // 抢占失败有两种完全不同的含义：并发重复签到，或调度器刚好把它释放成超时/结束。
+            // 一律回 already_checked_in 会让"其实已被判爽约"的用户以为自己签上了。
+            Reservation latest = getById(reservationId);
+            ReservationStatus latestStatus = latest == null ? null : latest.statusOrNull();
+            if (latestStatus == ReservationStatus.CHECKED_IN) {
+                return "already_checked_in";
+            }
+            if (latestStatus == ReservationStatus.TIMEOUT_RELEASED) {
+                return "expired";
+            }
+            return "error";
         }
 
         AttendanceRecord record = new AttendanceRecord();

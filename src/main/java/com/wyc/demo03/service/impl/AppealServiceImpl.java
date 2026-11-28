@@ -11,6 +11,7 @@ import com.wyc.demo03.mapper.CreditLogMapper;
 import com.wyc.demo03.mapper.ReservationMapper;
 import com.wyc.demo03.service.AppealService;
 import com.wyc.demo03.service.CreditService;
+import com.wyc.demo03.service.UserService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.dao.DuplicateKeyException;
@@ -39,6 +40,7 @@ public class AppealServiceImpl implements AppealService {
     private final ReservationMapper reservationMapper;
     private final CreditLogMapper creditLogMapper;
     private final CreditService creditService;
+    private final UserService userService;
     private final AuditLogMapper auditLogMapper;
     private final Clock clock;
 
@@ -212,6 +214,17 @@ public class AppealServiceImpl implements AppealService {
     }
 
     /** 复核人是否是原审核人（预约的 approvedBy）。 */
+    /**
+     * 复核人不得是"原处理人"。
+     *
+     * <p>两个来源都要查：
+     * <ul>
+     *   <li>预约类：{@code t_reservation.approved_by}（人工批准人）</li>
+     *   <li>信用类：手工认定的扣分，操作者记在 {@code t_credit_log.operator}（用户名）。
+     *       只查 approved_by 会漏掉"自动通过的预约被某管理员手工认定违规"这一路径 ——
+     *       该预约没有批准人，认定扣分的管理员就能自己复核针对这笔扣分的申诉。</li>
+     * </ul>
+     */
     private boolean isOriginalApprover(Appeal appeal, Long reviewerId) {
         Long reservationId = null;
         if (Appeal.TargetType.RESERVATION.name().equals(appeal.getTargetType())) {
@@ -220,6 +233,10 @@ public class AppealServiceImpl implements AppealService {
             CreditLog entry = creditLogMapper.selectById(appeal.getTargetId());
             if (entry != null) {
                 reservationId = entry.getReservationId();
+                String reviewerName = usernameOf(reviewerId);
+                if (reviewerName != null && reviewerName.equals(entry.getOperator())) {
+                    return true;
+                }
             }
         }
         if (reservationId == null) {
@@ -227,6 +244,14 @@ public class AppealServiceImpl implements AppealService {
         }
         Reservation r = reservationMapper.selectById(reservationId);
         return r != null && reviewerId.equals(r.getApprovedBy());
+    }
+
+    private String usernameOf(Long userId) {
+        if (userId == null) {
+            return null;
+        }
+        var user = userService.getById(userId);
+        return user == null ? null : user.getUsername();
     }
 
     /** 加 N 个工作日（跳过周六日；不做节假日表）。 */
