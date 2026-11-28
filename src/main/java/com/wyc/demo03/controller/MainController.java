@@ -67,7 +67,7 @@ public class MainController {
     // GET / 或 /index —— 首页看板
     // ====================================================================
     // 渲染首页，向模型注入四个统计数据，前端用 Bootstrap 卡片展示。
-    @GetMapping({"/", "/index"})
+    @GetMapping("/")
     public String home(Model model, HttpSession session) {
         // 从 session 获取当前登录用户 ID（在 loginAction 中写入）
         Long userId = (Long) session.getAttribute("Id");

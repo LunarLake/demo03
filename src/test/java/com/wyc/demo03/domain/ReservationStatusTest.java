@@ -81,7 +81,7 @@ class ReservationStatusTest {
         IllegalArgumentException ex = assertThrows(IllegalArgumentException.class,
                 () -> ReservationStatus.of(ReservationStatus.RETIRED_USER_CANCEL_CODE));
         assertTrue(ex.getMessage().contains("已废弃"), "错误信息必须说明 4 已废弃");
-        assertTrue(ex.getMessage().contains("migrate-v1-to-v2"), "错误信息必须指向迁移脚本");
+        assertTrue(ex.getMessage().contains("手工修正"), "错误信息必须给出可执行的修复指引");
 
         // 宽松版本不抛异常，返回 null，供只读展示路径使用
         assertNull(ReservationStatus.ofOrNull(4));

@@ -96,7 +96,7 @@ src/main/java/com/wyc/demo03/
 ├─ task/           定时收敛与日志滚动
 └─ common/         拦截器、异常处理、统一响应
 
-sql/               schema-v2.sql / migrate-v1-to-v2.sql / init-demo.sql
+sql/               schema-v2.sql / init-demo.sql / init-test-db.sh
 deploy/mosquitto/  mosquitto.conf（Docker）+ mosquitto-windows.conf（原生）+ ACL + 部署说明
 deploy/start-demo.ps1  一键启动（IP 自检 + Broker + 后端）
 docs/              施工图、验收对照、测试盘点、系统使用说明书
@@ -166,7 +166,8 @@ mysql -u root -p < sql/schema-v2.sql
 脚本自带 `CREATE DATABASE IF NOT EXISTS db02` 与 `USE db02`，不用先手工建库。
 它会 **DROP 全部业务表后重建**，并写入 2 个房间、2 台设备、5 个账号与初始规则版本。
 
-> ⚠️ 已有数据的环境不要执行本脚本，改用 `sql/migrate-v1-to-v2.sql` 做保数据迁移。
+> ⚠️ 本脚本会 DROP 全部业务表，**只用于全新初始化**。v1→v2 的迁移脚本已移除；
+> 已有数据的环境请先备份，再手工比对 `schema-v2.sql` 的结构差异。
 
 演示账号（统一密码 `demo123`）：
 

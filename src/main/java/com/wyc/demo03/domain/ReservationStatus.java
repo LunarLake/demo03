@@ -17,7 +17,7 @@ import java.util.Set;
  * v1 中 {@code 4} 表示「用户取消」。如果让 {@code 4} 复用为「已签到」，那么任何漏迁移的旧数据、
  * 任何未及时更新的 SQL，都会被读成「已签到」，并因此被授予开锁权限 —— 这是安全方向的错误。
  * 取用从未出现过的 {@code 6}/{@code 7}，旧代码读到新值必然落入 default 分支（拒绝），失败安全。
- * 旧值 {@code 4} 在迁移中已全部改写为 {@code 3}，见 {@code sql/migrate-v1-to-v2.sql}。
+ * 旧值 {@code 4} 已在 v2 中废弃，读到时按非法码处理。
  *
  * <h3>状态迁移表</h3>
  * <pre>
@@ -124,8 +124,8 @@ public enum ReservationStatus {
         if (status == null) {
             if (code == RETIRED_USER_CANCEL_CODE) {
                 throw new IllegalArgumentException(
-                        "预约状态码 4（v1 的\"用户取消\"）已废弃，迁移后应改写为 3（已取消）；"
-                                + "请执行 sql/migrate-v1-to-v2.sql 修正数据");
+                        "预约状态码 4（v1 的\"用户取消\"）已废弃，应为 3（已取消）；"
+                                + "请检查该行数据并手工修正为合法状态码");
             }
             throw new IllegalArgumentException("未知的预约状态码：" + code);
         }

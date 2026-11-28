@@ -166,14 +166,6 @@ public interface ReservationMapper extends BaseMapper<Reservation> {
     // 查询 / 统计
     // ====================================================================
 
-    /** 某房间某日仍待审批的申请，供排期板标注"仅待审、仍可选"。 */
-    @Select("SELECT r.room_id AS roomId, r.start_time AS startTime, r.end_time AS endTime "
-            + "FROM t_reservation r "
-            + "WHERE r.reservation_status = 0 "
-            + "  AND r.start_time < #{dayEnd} AND r.end_time > #{dayStart}")
-    List<Map<String, Object>> findPendingOnDate(@Param("dayStart") LocalDateTime dayStart,
-                                                @Param("dayEnd") LocalDateTime dayEnd);
-
     /**
      * 某日仍在进行中的预约（待审批 / 已通过 / 已签到），按开始时间升序。
      *
@@ -209,11 +201,6 @@ public interface ReservationMapper extends BaseMapper<Reservation> {
     @Select("SELECT HOUR(start_time) AS label, COUNT(*) AS count FROM t_reservation "
             + "WHERE reservation_status IN (1, 6, 7) GROUP BY HOUR(start_time) ORDER BY label ASC")
     List<Map<String, Object>> countByHour();
-
-    /** 房间是否还有有效预约（房间删除前校验）。 */
-    @Select("SELECT COUNT(*) FROM t_reservation "
-            + "WHERE room_id = #{roomId} AND reservation_status IN (0, 1, 6)")
-    int countActiveByRoom(@Param("roomId") Long roomId);
 
     /** 某用户是否存在未被申诉撤销的违规记录（基础规则 B06）。 */
     @Select("SELECT COUNT(*) FROM t_credit_log c "
