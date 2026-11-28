@@ -27,6 +27,7 @@ import java.time.LocalDateTime;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
@@ -52,6 +53,8 @@ class AccessServiceImplTest {
     @Mock private AccessLogMapper accessLogMapper;
     @Mock private DeviceCommandService deviceCommandService;
     @Mock private DoorController doorController;
+    /** 单元测试没有真库，用 mock 的事务管理器让 TransactionTemplate 直接执行回调。 */
+    @Mock private org.springframework.transaction.PlatformTransactionManager txManager;
 
     private final MutableClock clock = MutableClock.at(NOW);
     private final DoorProperties doorProperties = new DoorProperties();
@@ -60,7 +63,10 @@ class AccessServiceImplTest {
     @BeforeEach
     void setUp() {
         service = new AccessServiceImpl(reservationMapper, deviceMapper, accessLogMapper,
-                deviceCommandService, doorController, doorProperties, clock);
+                deviceCommandService, doorController, doorProperties, clock,
+                new org.springframework.transaction.support.TransactionTemplate(txManager));
+        // 默认允许投递；个别用例需要模拟"指令已投递/已过期"时再覆盖
+        org.mockito.Mockito.lenient().when(deviceCommandService.markSent(any())).thenReturn(true);
     }
 
     private Reservation reservation(int status, LocalDateTime start, LocalDateTime end) {
@@ -210,6 +216,42 @@ class AccessServiceImplTest {
         assertFalse(result.acknowledged());
         assertEquals("SENT", result.commandStatus());
         verify(deviceCommandService, never()).ack(any(), any(), any());
+    }
+
+    @Test
+    @DisplayName("R05 未签到的预约不得自动开门：与 reopen 的校验必须对齐")
+    void openAfterCheckInRejectsNotCheckedIn() {
+        Reservation r = reservation(ReservationStatus.APPROVED.code(), NOW.minusMinutes(1), NOW.plusHours(1));
+        when(reservationMapper.selectById(RES_ID)).thenReturn(r);
+
+        AccessService.UnlockResult result = service.openAfterCheckIn(RES_ID, USER, "127.0.0.1");
+
+        assertFalse(result.granted());
+        assertEquals("STATUS_INVALID", result.denyReason());
+        verify(deviceCommandService, never()).issue(any(), any(), any(), any(),
+                org.mockito.ArgumentMatchers.anyInt());
+    }
+
+    @Test
+    @DisplayName("R03 投递抛异常时，已入库的指令与开门记录必须还在：门开了就要查得到")
+    void dispatchFailureKeepsAuthorizationRecord() {
+        Reservation r = reservation(ReservationStatus.CHECKED_IN.code(), NOW.minusMinutes(1), NOW.plusHours(1));
+        when(reservationMapper.selectById(RES_ID)).thenReturn(r);
+        when(deviceMapper.findByRoomId(1L)).thenReturn(device());
+        when(doorController.reachable(any())).thenReturn(true);
+        DeviceCommand command = new DeviceCommand();
+        command.setMsgId("msg-9");
+        when(deviceCommandService.issue(any(), any(), any(), any(),
+                org.mockito.ArgumentMatchers.anyInt())).thenReturn(command);
+        when(doorController.dispatch(any(), any())).thenThrow(new IllegalStateException("broker down"));
+
+        assertThrows(IllegalStateException.class,
+                () -> service.openAfterCheckIn(RES_ID, USER, "127.0.0.1"));
+
+        // 授权与投递不在同一个事务里：发布失败不会把"已放行"的记录一起回滚
+        verify(deviceCommandService).issue(any(), any(), any(), any(),
+                org.mockito.ArgumentMatchers.anyInt());
+        verify(accessLogMapper).insert(any(AccessLog.class));
     }
 
     @Test

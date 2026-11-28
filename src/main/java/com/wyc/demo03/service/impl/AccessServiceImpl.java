@@ -16,13 +16,21 @@ import com.wyc.demo03.service.DeviceCommandService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionTemplate;
 
 import java.time.Clock;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.List;
 
+/**
+ * 开门授权。
+ *
+ * <p><b>事务边界只包"写库"，不包 MQTT 投递。</b>
+ * 发布一条开锁指令是不可回滚的物理动作：如果把它放在
+ * {@code @Transactional} 里，一旦随后写 {@code t_access_log} 失败或事务提交失败，
+ * 就会出现"门已经开了、系统里查无记录"。这与签到侧 BUG-004 是同一条教训。
+ */
 @Slf4j
 @Service
 @RequiredArgsConstructor
@@ -37,9 +45,9 @@ public class AccessServiceImpl implements AccessService {
     private final DoorController doorController;
     private final DoorProperties doorProperties;
     private final Clock clock;
+    private final TransactionTemplate transactionTemplate;
 
     @Override
-    @Transactional(rollbackFor = Exception.class)
     public UnlockResult reopen(Long reservationId, Long userId, String ip) {
         Reservation r = reservationMapper.selectById(reservationId);
         if (r == null || userId == null || !userId.equals(r.getUserId())) {
@@ -71,21 +79,26 @@ public class AccessServiceImpl implements AccessService {
     }
 
     @Override
-    @Transactional(rollbackFor = Exception.class)
     public UnlockResult openAfterCheckIn(Long reservationId, Long userId, String ip) {
         Reservation reservation = reservationId == null ? null : reservationMapper.selectById(reservationId);
         if (reservation == null) {
+            record(null, userId, null, null, ip, "STATUS_INVALID");
             return UnlockResult.deny("STATUS_INVALID", "预约不存在");
         }
         if (userId == null || !userId.equals(reservation.getUserId())) {
-            record(reservation, userId, null, null, null, "NOT_OWNER");
+            record(reservation, userId, null, null, ip, "NOT_OWNER");
             return UnlockResult.deny("NOT_OWNER", "无权对该预约开门");
         }
-        // 签到刚刚校验过状态，这里补一次时段校验（签到窗口在开始之后必然成立，
-        // 保留判断是为了防止"补签/手工改时间"等旁路绕过）
+        // 与 reopen 对齐：只有"已签到"才允许自动开门。
+        // 不能只依赖"唯一调用方是签到成功后"——任何补签/重试/管理端复用都会变成"未签到可开门"。
+        if (reservation.statusOrNull() != ReservationStatus.CHECKED_IN) {
+            record(reservation, userId, null, null, ip, "STATUS_INVALID");
+            return UnlockResult.deny("STATUS_INVALID", "签到状态异常，未下发开门指令");
+        }
+        // 时段校验保留：防止"补签/手工改时间"等旁路绕过
         LocalDateTime now = LocalDateTime.now(clock);
         if (now.isBefore(reservation.getStartTime()) || !now.isBefore(reservation.getEndTime())) {
-            record(reservation, userId, null, null, null, "OUT_OF_WINDOW");
+            record(reservation, userId, null, null, ip, "OUT_OF_WINDOW");
             return UnlockResult.deny("OUT_OF_WINDOW", "不在预约有效时段内，未下发开门指令");
         }
         return unlock(reservation, userId, ip, "FIRST_CHECKIN");
@@ -109,11 +122,38 @@ public class AccessServiceImpl implements AccessService {
             return UnlockResult.deny("DEVICE_OFFLINE", "门禁离线，请联系管理员或使用备用钥匙");
         }
 
-        DeviceCommand command = deviceCommandService.issue(device.getId(), r.getId(),
-                DeviceCommand.Type.UNLOCK, payload(r, userId, reason), doorProperties.getTtlSeconds());
+        // 1) 授权：只写库。事务边界到这里为止（入库指令 + 记录"服务端已放行"）
+        DeviceCommand command = transactionTemplate.execute(status -> {
+            DeviceCommand cmd = deviceCommandService.issue(device.getId(), r.getId(),
+                    DeviceCommand.Type.UNLOCK, payload(r, userId, reason), doorProperties.getTtlSeconds());
+            // 已授权就记 granted=1：即使回执还没到，"服务端已放行"这个事实也要留痕
+            record(r, userId, device.getId(), cmd.getId(), ip, null);
+            return cmd;
+        });
 
-        // 先置 SENT 再投递：回执只接受 SENT 状态的指令，否则 ack 会被状态条件静默挡住
-        deviceCommandService.markSent(command.getMsgId());
+        // 2) 投递：MQTT 发布不可回滚，必须放在事务提交之后
+        DispatchResult dispatch = deliver(device, command);
+
+        return switch (dispatch) {
+            case ACKED -> UnlockResult.granted(command.getMsgId(), "ACKED", "门禁已开锁，请推门进入");
+            case SENT -> UnlockResult.granted(command.getMsgId(), "SENT", "开门指令已下发，等待门禁确认");
+            case FAILED -> UnlockResult.granted(command.getMsgId(), "FAILED",
+                    "已授权，但指令未能下发到门禁，请联系管理员或使用机械释放杆");
+        };
+    }
+
+    /**
+     * 投递并结算。**必须在授权事务提交之后调用。**
+     *
+     * <p>{@code markSent} 只接受 PENDING 状态：返回 false 说明这条指令已经投递过或已过期，
+     * 此时不得再驱动一次电控锁，否则一次点击可能在设备侧执行两次。
+     */
+    private DispatchResult deliver(Device device, DeviceCommand command) {
+        if (!deviceCommandService.markSent(command.getMsgId())) {
+            log.info("开门指令重复投递被忽略：msgId={}", command.getMsgId());
+            return DispatchResult.SENT;
+        }
+
         DispatchResult dispatch = doorController.dispatch(device, command);
 
         if (dispatch == DispatchResult.ACKED) {
@@ -130,16 +170,7 @@ public class AccessServiceImpl implements AccessService {
                 dispatch = DispatchResult.ACKED;
             }
         }
-
-        // 已授权就记 granted=1：即使回执还没到，"服务端已放行"这个事实也要留痕
-        record(r, userId, device.getId(), command.getId(), ip, null);
-
-        return switch (dispatch) {
-            case ACKED -> UnlockResult.granted(command.getMsgId(), "ACKED", "门禁已开锁，请推门进入");
-            case SENT -> UnlockResult.granted(command.getMsgId(), "SENT", "开门指令已下发，等待门禁确认");
-            case FAILED -> UnlockResult.granted(command.getMsgId(), "FAILED",
-                    "已授权，但指令未能下发到门禁，请联系管理员或使用机械释放杆");
-        };
+        return dispatch;
     }
 
     /**
