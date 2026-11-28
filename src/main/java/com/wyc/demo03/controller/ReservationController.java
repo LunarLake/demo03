@@ -97,7 +97,9 @@ public class ReservationController {
     public ApiResponse<RoomBoardService.Board> roomBoard(@RequestParam(required = false) String date,
                                                          HttpSession session) {
         Long userId = (Long) session.getAttribute("Id");
-        return ApiResponse.ok(roomBoardService.build(parseDate(date), userId));
+        String role = (String) session.getAttribute("role");
+        // 传 role 是为了让教师看到"可覆盖"的格子；学生仍看到不可点的已占用
+        return ApiResponse.ok(roomBoardService.build(parseDate(date), userId, role));
     }
 
     /**

@@ -92,6 +92,38 @@ class RoomBoardServiceTest {
         return ReservationSlot.of(reservationId, 1L, TODAY.plusDays(1), index);
     }
 
+    @Test
+    @DisplayName("R04 教师能覆盖尚未开始的学生预约，学生自己看不到可点")
+    void teacherCanOverrideUnstartedOthers() {
+        LocalDate day = TODAY.plusDays(1);
+        when(reservationSlotMapper.findByDate(day)).thenReturn(List.of(slot(200L, 40)));
+        when(reservationMapper.findActiveOnDate(any(), any())).thenReturn(List.of(
+                reservation(200L, 8L, ReservationStatus.APPROVED.code(),
+                        day.atTime(18, 0), day.atTime(18, 30))));
+
+        assertFalse(slotAt(service.build(day, ME, "STUDENT"), 0, 40).actionable(),
+                "学生不能动别人的占用");
+
+        RoomBoardService.Board teacherBoard = service.build(day, ME, "TEACHER");
+        assertEquals("OCCUPIED", slotAt(teacherBoard, 0, 40).state());
+        assertTrue(slotAt(teacherBoard, 0, 40).actionable(), "教师应能覆盖未开始的预约");
+    }
+
+    @Test
+    @DisplayName("R04 已开始的预约教师也不能覆盖：人可能已经在房间里了")
+    void teacherCannotOverrideStarted() {
+        when(reservationSlotMapper.findByDate(TODAY)).thenReturn(List.of(
+                ReservationSlot.of(201L, 1L, TODAY, 4)));
+        when(reservationMapper.findActiveOnDate(any(), any())).thenReturn(List.of(
+                reservation(201L, 8L, ReservationStatus.APPROVED.code(),
+                        TODAY.atTime(9, 0), TODAY.atTime(9, 30))));
+
+        RoomBoardService.Board board = service.build(TODAY, ME, "TEACHER");
+
+        assertEquals("OCCUPIED", slotAt(board, 0, 4).state());
+        assertFalse(slotAt(board, 0, 4).actionable(), "已开始就不能覆盖");
+    }
+
     private RoomBoardService.Slot slotAt(RoomBoardService.Board board, int roomIndex, int index) {
         return board.rooms().get(roomIndex).slots().get(index);
     }

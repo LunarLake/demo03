@@ -100,6 +100,14 @@ public class RoomBoardService {
      * @param userId 当前用户，用于区分"我的"与"别人的"
      */
     public Board build(LocalDate date, Long userId) {
+        return build(date, userId, null);
+    }
+
+    /**
+     * @param role 当前用户角色。教师对「别人已占用但尚未开始」的格子可覆盖，
+     *             这个判断只有后端有（前端拿不到别人的预约状态），所以必须在这里算。
+     */
+    public Board build(LocalDate date, Long userId, String role) {
         LocalDateTime now = LocalDateTime.now(clock);
         LocalDate day = date == null ? now.toLocalDate() : date;
 
@@ -148,7 +156,7 @@ public class RoomBoardService {
             for (int i = 0; i < slotSchema.slotsPerDay(); i++) {
                 LocalDateTime start = slotSchema.startOf(day, i);
                 LocalDateTime end = slotSchema.endOf(day, i);
-                slots.add(judge(i, start, end, now, closed, tooFar, userId,
+                slots.add(judge(i, start, end, now, closed, tooFar, userId, role,
                         roomOccupied, byId, roomMinePending, roomOthersPending));
             }
             rows.add(new RoomRow(room.getId(), room.getRoomName(), room.getCapacity(),
@@ -191,7 +199,7 @@ public class RoomBoardService {
     // ====================================================================
 
     private Slot judge(int index, LocalDateTime start, LocalDateTime end, LocalDateTime now,
-                       boolean closed, boolean tooFar, Long userId,
+                       boolean closed, boolean tooFar, Long userId, String role,
                        Map<Integer, Long> occupied, Map<Long, Reservation> byId,
                        Set<Integer> minePending, Set<Integer> othersPending) {
         String label = start.toLocalTime().format(HH_MM);
@@ -210,9 +218,16 @@ public class RoomBoardService {
         if (reservationId != null) {
             Reservation r = byId.get(reservationId);
             boolean mine = userId != null && r != null && userId.equals(r.getUserId());
-            return mine
-                    ? new Slot(index, label, SlotState.MINE.name(), false, "我的预约")
-                    : new Slot(index, label, SlotState.OCCUPIED.name(), false, null);
+            if (mine) {
+                return new Slot(index, label, SlotState.MINE.name(), false, "我的预约");
+            }
+            // 教师可覆盖「尚未开始」的学生预约。这个判断只有后端能做：
+            // 前端拿不到别人的预约状态，"已开始"是硬边界（人可能已经在房间里了）。
+            if ("TEACHER".equals(role) && r != null && !r.hasStarted(now)) {
+                return new Slot(index, label, SlotState.OCCUPIED.name(), true,
+                        "该时段已有学生预约，提交将覆盖并取消对方");
+            }
+            return new Slot(index, label, SlotState.OCCUPIED.name(), false, null);
         }
         if (minePending.contains(index)) {
             return new Slot(index, label, SlotState.MINE_PENDING.name(), true, "我的申请待审批");

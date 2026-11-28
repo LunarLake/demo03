@@ -231,6 +231,17 @@
       blockers.push('信用分 ' + limits.creditScore + ' 分，提交前需填写用途说明');
     }
 
+    // 教师覆盖他人预约时给出明确警示：提交会取消对方，不能悄悄发生
+    if (room) {
+      for (let i = from; i <= to; i++) {
+        const s = room.slots[i];
+        if (s && s.hint && s.hint.indexOf('覆盖') >= 0) {
+          notices.push(s.hint);
+          break;
+        }
+      }
+    }
+
     // 只会「转人工审核」的，单独提示，不拦提交
     if (limits.maxContinuousMinutes && minutes > limits.maxContinuousMinutes) {
       notices.push('超过 ' + limits.maxContinuousMinutes + ' 分钟，将转管理员人工审核');
