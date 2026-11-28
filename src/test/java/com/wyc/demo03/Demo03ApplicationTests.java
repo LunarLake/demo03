@@ -3,6 +3,7 @@ package com.wyc.demo03;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.test.context.SpringBootTest;
 
+@org.springframework.test.context.ActiveProfiles({"local", "test"})
 @SpringBootTest
 class Demo03ApplicationTests {
 

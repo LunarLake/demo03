@@ -36,6 +36,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * <p>这一段必须在真库上验：它横跨预约状态、签到记录、设备指令、开门日志四张表，
  * 任何一处唯一键或时间窗写错，表现都是"人站在门口打不开"。
  */
+@org.springframework.test.context.ActiveProfiles({"local", "test"})
 @SpringBootTest
 @Transactional
 class AccessFlowIntegrationTest {

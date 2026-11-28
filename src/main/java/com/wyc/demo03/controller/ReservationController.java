@@ -25,7 +25,6 @@ import org.springframework.web.bind.annotation.ResponseBody;
 import org.springframework.web.servlet.mvc.support.RedirectAttributes;
 
 import java.time.LocalDate;
-import java.util.List;
 import java.util.Map;
 
 /**
@@ -261,20 +260,12 @@ public class ReservationController {
     }
 
     /**
-     * 排期数据。{@code date} 用字符串接收再解析，避免非法日期直接抛 400。
+     * 排期数据。
+     *
+     * <p>已删除旧的 {@code /api/room-schedule}：它随 {@code reservation-new.js} 一起废弃，
+     * 但仍在返回 {@code u.name}（其他人的姓名）与角色，任何登录用户都能枚举
+     * "某房间某天谁订了"。排期板的 {@code /api/room-board} 只回状态与提示，不含他人姓名。
      */
-    @ResponseBody
-    @GetMapping("/api/room-schedule")
-    public ApiResponse<List<Map<String, Object>>> roomSchedule(@RequestParam Long roomId,
-                                                               @RequestParam String date) {
-        LocalDate day;
-        try {
-            day = LocalDate.parse(date);
-        } catch (RuntimeException e) {
-            return ApiResponse.ok(List.of());
-        }
-        return ApiResponse.ok(reservationService.findScheduleByRoomAndDate(roomId, day));
-    }
 
     // ====================================================================
     // 签到

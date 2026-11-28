@@ -34,6 +34,7 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
  * <p>统计是全表聚合，库里已经有演示数据。因此断言的不是绝对值，而是
  * <b>插入固定夹具前后的增量</b>，这样测试之间、与演示数据之间都互不影响。
  */
+@org.springframework.test.context.ActiveProfiles({"local", "test"})
 @SpringBootTest
 @Transactional
 class AttendanceStatisticsIntegrationTest {

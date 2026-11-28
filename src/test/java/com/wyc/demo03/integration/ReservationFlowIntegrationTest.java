@@ -40,6 +40,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * 前提是本机 MySQL 已按 {@code sql/schema-v2.sql} 初始化。每个用例在事务内执行并回滚，
  * 不污染开发库。
  */
+@org.springframework.test.context.ActiveProfiles({"local", "test"})
 @SpringBootTest
 @Transactional
 class ReservationFlowIntegrationTest {

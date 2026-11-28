@@ -751,14 +751,6 @@ class ReservationServiceImplTest {
     // 查询透传（防止有人把房间名等字段在改造中漏掉）
     // ====================================================================
     @Test
-    void scheduleUsesDayBounds() {
-        LocalDate day = LocalDate.of(2026, 10, 21);
-        when(reservationMapper.findByRoomAndDate(1L, day.atStartOfDay(), day.plusDays(1).atStartOfDay()))
-                .thenReturn(List.of());
-        assertNotNull(service.findScheduleByRoomAndDate(1L, day));
-    }
-
-    @Test
     @DisplayName("slot 单元展开与占用集合一致")
     void unitsMatchSchema() {
         List<SlotUnit> units = schema.split(T0.toLocalDate().plusDays(1).atTime(9, 15),

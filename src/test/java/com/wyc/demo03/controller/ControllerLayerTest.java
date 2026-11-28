@@ -422,28 +422,6 @@ class ControllerLayerTest {
     }
 
     @Test
-    void roomScheduleReturnsJson() throws Exception {
-        // Arrange
-        when(reservationService.findScheduleByRoomAndDate(1L, java.time.LocalDate.of(2026, 8, 13)))
-                .thenReturn(java.util.List.of());
-
-        // Act & Assert
-        mockMvc.perform(get("/api/room-schedule")
-                        .param("roomId", "1")
-                        .param("date", "2026-08-13"))
-                .andExpect(status().isOk());
-    }
-
-    @Test
-    @DisplayName("非法日期不抛 400，返回空列表")
-    void roomScheduleToleratesBadDate() throws Exception {
-        mockMvc.perform(get("/api/room-schedule")
-                        .param("roomId", "1")
-                        .param("date", "2026-13-99"))
-                .andExpect(status().isOk());
-    }
-
-    @Test
     void logsPageRendersWithPagination() throws Exception {
         // Arrange：分页查询链返回空页
         com.wyc.demo03.service.LogService logService = org.mockito.Mockito.mock(com.wyc.demo03.service.LogService.class);

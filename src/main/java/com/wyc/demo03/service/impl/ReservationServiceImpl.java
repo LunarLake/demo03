@@ -587,12 +587,6 @@ public class ReservationServiceImpl extends ServiceImpl<ReservationMapper, Reser
         return baseMapper.findDetailById(id);
     }
 
-    @Override
-    public List<Map<String, Object>> findScheduleByRoomAndDate(Long roomId, LocalDate date) {
-        LocalDate day = date == null ? LocalDate.now(clock) : date;
-        return baseMapper.findByRoomAndDate(roomId, day.atStartOfDay(), day.plusDays(1).atStartOfDay());
-    }
-
     // ====================================================================
     // 私有辅助
     // ====================================================================

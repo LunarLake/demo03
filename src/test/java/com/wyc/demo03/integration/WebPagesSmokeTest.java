@@ -27,6 +27,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  *
  * <p>用 {@code @Transactional} 包裹：页面只读，但访问日志拦截器会写 {@code t_log}。
  */
+@org.springframework.test.context.ActiveProfiles({"local", "test"})
 @SpringBootTest
 @AutoConfigureMockMvc
 @Transactional

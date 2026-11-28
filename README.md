@@ -4,7 +4,7 @@
 > 本文是项目总览；施工细节见 [`docs/重构改造计划.md`](docs/重构改造计划.md)，
 > 验收对照见 [`docs/acceptance.md`](docs/acceptance.md)。
 
-**当前状态（2026-11-27）**：软件侧 P0–P8 全部完成，单元 + 集成测试 **327 条全绿**；
+**当前状态（2026-11-28）**：软件侧 P0–P8 全部完成，单元 + 集成测试 **329 条全绿**；
 固件侧已实现并在真机跑通**完整链路**——网页签到 → 服务端下发 → 设备验签 → 开锁脉冲 →
 回执 `OK` → 命令置 `ACKED`，往返 **252 ms**。
 
@@ -365,8 +365,18 @@ mysql -u root -p db02 < sql/init-demo.sql
 ## 6. 测试
 
 ```bash
-./mvnw test          # 295 tests
+# 首次准备独立测试库（结构与种子来自 sql/schema-v2.sql）
+bash sql/init-test-db.sh root '你的密码'
+
+./mvnw test          # 329 tests
 ```
+
+测试跑在 **独立的 `db02_test`** 上，不会污染开发库 `db02`。
+`src/test/resources/application-test.yml` 只覆盖数据源 URL，
+账号密码仍取自 `application-local.yml`。
+
+> 旧版测试直接连 `db02`，手工用过系统后测试会因"多了一间房 / 此刻有一笔进行中的预约"而误报。
+> 现在两者隔离；改动 schema 后重跑一次 `sql/init-test-db.sh` 即可。
 
 | 层次 | 代表用例 |
 |---|---|

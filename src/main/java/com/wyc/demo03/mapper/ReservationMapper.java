@@ -156,15 +156,6 @@ public interface ReservationMapper extends BaseMapper<Reservation> {
     // ====================================================================
     // 查询 / 统计
     // ====================================================================
-    /** 某房间某日的有效预约（已通过/已签到），用于日程与排期板。 */
-    @Select("SELECT r.*, u.name AS userName, u.role AS role FROM t_reservation r "
-            + "JOIN t_user u ON r.user_id = u.id "
-            + "WHERE r.room_id = #{roomId} AND r.reservation_status IN (1, 6) "
-            + "  AND r.start_time < #{dayEnd} AND r.end_time > #{dayStart} "
-            + "ORDER BY r.start_time")
-    List<Map<String, Object>> findByRoomAndDate(@Param("roomId") Long roomId,
-                                                @Param("dayStart") LocalDateTime dayStart,
-                                                @Param("dayEnd") LocalDateTime dayEnd);
 
     /** 某房间某日仍待审批的申请，供排期板标注"仅待审、仍可选"。 */
     @Select("SELECT r.room_id AS roomId, r.start_time AS startTime, r.end_time AS endTime "

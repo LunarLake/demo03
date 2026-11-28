@@ -40,6 +40,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * <p>不用这个办法就得等真实时间，或者把每个判断的时间来源改成可传参 —— 前者没法测，
  * 后者会让每个业务方法都多一个"现在几点"的参数。注入 Clock 是最小侵入的做法。
  */
+@org.springframework.test.context.ActiveProfiles({"local", "test"})
 @SpringBootTest
 @Transactional
 @Import(TimeTravelConvergenceTest.ClockOverride.class)

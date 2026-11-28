@@ -38,6 +38,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  *
  * <p>这是唯一能证明"接上 Broker 后真的能开锁"的测试，也是项目从纯软件变成软硬件结合的分界线。
  */
+@org.springframework.test.context.ActiveProfiles({"local", "test"})
 @SpringBootTest(properties = {
         "app.door.mode=mqtt",
         "app.mqtt.mode=inprocess",

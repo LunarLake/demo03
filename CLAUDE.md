@@ -46,8 +46,12 @@ controller → service（接口）→ service/impl → mapper（MyBatis-Plus Bas
 - standalone MockMvc 需要 `InternalResourceViewResolver`（`/WEB-INF/views/` + `.html`）。
   多个 controller 要挂同一个 MockMvc —— 分别 `standaloneSetup` 会各建一个 ServletContext，
   `MockHttpSession` 跨上下文用会报 "Cannot reinitialize with different application context"。
-- 真库集成测试（`@SpringBootTest`）依赖 `sql/schema-v2.sql` 建好的 `db02`，
-  需要预置账号与设备；改 schema 时同步改这个文件。
+- 真库集成测试（`@SpringBootTest`）跑在**独立测试库 `db02_test`** 上，
+  由 `sql/init-test-db.sh` 从 `sql/schema-v2.sql` 建库 + 灌种子（2 间房 / 6 个账号 / 2 台设备 / 规则版本 1）。
+  `src/test/resources/application-test.yml` 只覆盖 `spring.datasource.url`，
+  账号密码仍来自 `application-local.yml`（测试同时激活 `local` + `test` 两个 profile）。
+  改 schema 后要重跑一次建库脚本。**不要把测试指回 `db02`** —— 开发库里有手工数据，
+  测试会因"多了一间房""此刻有一笔进行中的预约"而误报。
 - **不要原地修改 mapper 返回的集合**：`List.of(...)` 之类不可变集合会抛
   `UnsupportedOperationException`，先 `new ArrayList<>(...)` 再排序。
 

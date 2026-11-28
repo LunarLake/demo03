@@ -36,6 +36,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * <p>单测能证明逻辑分支，证明不了"唯一键真的挡住了重复扣分""申诉对冲后分数回到原值"。
  * 这两件事直接决定用户会不会被冤枉扣两次分，必须在真库上验。
  */
+@org.springframework.test.context.ActiveProfiles({"local", "test"})
 @SpringBootTest
 @Transactional
 class CreditAndAppealIntegrationTest {

@@ -30,6 +30,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  *
  * <p>因此它自己负责数据清理：动手前和收尾时都清空该用户的流水并复位分数。
  */
+@org.springframework.test.context.ActiveProfiles({"local", "test"})
 @SpringBootTest
 class CreditConcurrencyTest {
 

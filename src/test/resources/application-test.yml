@@ -1,0 +1,13 @@
+# =============================================================
+# 测试专用配置（profile: test）
+# -------------------------------------------------------------
+# 只覆盖数据源 URL：指向独立测试库 db02_test，与开发库 db02 隔离。
+# 测试库里可以随便写、随便脏，不影响开发/演示数据。
+#
+# 前置：先用 sql/init-test-db.sh 建库。
+# 账号密码仍来自 application-local.yml（测试同时激活 local profile），
+# 仓库里不落密码。
+# =============================================================
+spring:
+  datasource:
+    url: jdbc:mysql://${DB_HOST:localhost}:${DB_PORT:3306}/${DB_TEST_NAME:db02_test}?useUnicode=true&characterEncoding=utf-8&useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Shanghai
