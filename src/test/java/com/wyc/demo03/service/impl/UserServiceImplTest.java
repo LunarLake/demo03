@@ -5,6 +5,7 @@ import com.baomidou.mybatisplus.core.conditions.AbstractWrapper;
 import com.wyc.demo03.entity.User;
 import com.wyc.demo03.mapper.UserMapper;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
@@ -25,7 +26,7 @@ import static org.mockito.Mockito.when;
 
 /**
  * UserServiceImpl.login() 的单元测试：
- * 覆盖用户不存在、BCrypt 校验通过/失败、明文密码登录即迁移、明文密码错误五个分支。
+ * 覆盖用户不存在、BCrypt 校验通过/失败、明文密码被拒绝 等分支。
  */
 @ExtendWith(MockitoExtension.class)
 class UserServiceImplTest {
@@ -99,25 +100,17 @@ class UserServiceImplTest {
     }
 
     @Test
-    void migratesPlaintextPasswordToBcryptOnSuccessfulLogin() {
-        // Arrange
+    @DisplayName("存量明文密码一律拒绝登录：不再保留明文直通后门")
+    void rejectsPlaintextStoredPassword() {
+        // Arrange：库里若还有明文行，不能凭它登录
         when(userMapper.findByUsername("olduser")).thenReturn(plainUser);
-        when(userMapper.update(any(), any())).thenReturn(1);
 
         // Act
         User result = userService.login("olduser", "plainpass");
 
         // Assert
-        assertNotNull(result);
-        // 返回对象上的密码已替换为 BCrypt 哈希
-        assertTrue(result.getPassword().startsWith("$2a$"));
-        assertTrue(BCrypt.checkpw("plainpass", result.getPassword()));
-        // 写库语句的参数值中密码同样为 BCrypt 哈希（登录即迁移）
-        @SuppressWarnings("unchecked")
-        ArgumentCaptor<AbstractWrapper<User, ?, ?>> wrapperCaptor = ArgumentCaptor.forClass(AbstractWrapper.class);
-        verify(userMapper).update(isNull(), wrapperCaptor.capture());
-        assertTrue(wrapperCaptor.getValue().getParamNameValuePairs().values().stream()
-                .anyMatch(v -> v instanceof String s && s.startsWith("$2a$")));
+        assertNull(result);
+        verify(userMapper, never()).update(any(), any());
     }
 
     @Test
@@ -213,21 +206,20 @@ class UserServiceImplTest {
     }
 
     @Test
-    void changePasswordMigratesPlaintextStoredPassword() {
-        // Arrange：存量明文密码账号，验证原密码后哈希新密码
+    @DisplayName("存量明文密码账号无法自助改密：原密码校验直接失败，需管理员重置")
+    void changePasswordRejectsPlaintextStoredPassword() {
+        // Arrange：存量明文密码账号
         User user = new User();
         user.setId(1L);
         user.setPassword("plain-old");
         when(userMapper.selectById(1L)).thenReturn(user);
-        when(userMapper.update(any(), any())).thenReturn(1);
-        when(userMapper.updateById(any(User.class))).thenReturn(1);
 
         // Act
         String result = userService.changePassword(1L, "plain-old", "newpass123");
 
         // Assert
-        assertEquals("success", result);
-        assertTrue(BCrypt.checkpw("newpass123", user.getPassword()));
+        assertEquals("wrong_password", result);
+        verify(userMapper, never()).updateById(any(User.class));
     }
 
     // ============ updateProfile ============

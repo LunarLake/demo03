@@ -27,9 +27,14 @@ public class CsrfInterceptor implements HandlerInterceptor {
     public boolean preHandle(HttpServletRequest request, HttpServletResponse response, Object handler) throws Exception {
         HttpSession session = request.getSession(false);
 
-        // 无会话的请求（如匿名直连 POST）：直接拒绝写操作
+        // 无会话的请求：写操作直接拒绝；匿名 GET 则显式建会话。
+        // 不能指望别的拦截器顺手 getSession() —— 那样一调整拦截器顺序或排除路径，
+        // 登录页的 _csrf 就会渲染成空值，表现为"密码正确也登不进去"且毫无提示。
         if (session == null) {
-            return "POST".equalsIgnoreCase(request.getMethod()) ? reject(response) : true;
+            if ("POST".equalsIgnoreCase(request.getMethod())) {
+                return reject(response);
+            }
+            session = request.getSession(true);
         }
 
         String token = (String) session.getAttribute(SESSION_ATTR);
