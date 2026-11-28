@@ -83,6 +83,7 @@ class ReservationServiceImplTest {
     @Mock private CreditService creditService;
     @Mock private DeviceNotifier deviceNotifier;
     @Mock private AuditLogMapper auditLogMapper;
+    @Mock private com.wyc.demo03.mapper.UserMapper userMapper;
 
     private final MutableClock clock = MutableClock.at(T0);
     private final SlotProperties properties = new SlotProperties();
@@ -106,7 +107,7 @@ class ReservationServiceImplTest {
 
         service = new ReservationServiceImpl(attendanceRecordService, meetingRoomService, userService,
                 slotService, checkinCodeService, creditService, engine, schema, properties,
-                auditLogMapper, clock, deviceNotifier);
+                auditLogMapper, userMapper, clock, deviceNotifier);
         ReflectionTestUtils.setField(service, "baseMapper", reservationMapper);
 
         room = new MeetingRoom();
@@ -253,7 +254,10 @@ class ReservationServiceImplTest {
         @Test
         @DisplayName("当日自动通过已达 3 笔 → 转人工")
         void dailyLimitForcesManual() {
-            when(reservationMapper.countAutoPassOnDate(7L, T0.toLocalDate().plusDays(1))).thenReturn(3);
+            // 口径是「提交日」，不是预约发生日：即使明天才开始，今天提交也要计入今天的额度
+            when(reservationMapper.countAutoPassOnDate(7L,
+                    T0.toLocalDate().atStartOfDay(), T0.toLocalDate().plusDays(1).atStartOfDay()))
+                    .thenReturn(3);
             var result = service.submit(tomorrow(), 7L, "STUDENT");
             assertEquals(ReservationStatus.PENDING, result.status());
             assertTrue(result.message().contains("自动通过笔数"));

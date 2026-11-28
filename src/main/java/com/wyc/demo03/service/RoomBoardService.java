@@ -157,7 +157,7 @@ public class RoomBoardService {
 
         return new Board(day.toString(), slotSchema.openLabel(), slotSchema.closeLabel(),
                 slotSchema.unitMinutes(), slotSchema.slotsPerDay(), bookable,
-                hourMarks(day), rows, buildLimits(userId, day));
+                hourMarks(day), rows, buildLimits(userId));
     }
 
     /**
@@ -166,13 +166,14 @@ public class RoomBoardService {
      * <p>区分两种"不满足"：{@code blocked} 是提交必被拒（信用低于准入线），
      * 其余阈值（连续时长、人数）只是**转人工**，前端提示口径不能混。
      */
-    private Limits buildLimits(Long userId, LocalDate day) {
+    private Limits buildLimits(Long userId) {
         RuleParams p = ruleParamsProvider.current();
         if (userId == null) {
             return new Limits(null, p.midCreditMin(), false, p.maxContinuousMinutes(),
                     p.manualReviewHeadcount(), p.autoApproveCredit(), p.midCreditMin(),
                     p.midMaxDurationMinutes(), p.autoApproveDailyLimit(), null, false, null);
         }
+        LocalDate today = LocalDate.now(clock);
         int credit = creditService.scoreOf(userId);
         boolean blocked = credit < p.baseRuleMinCredit();
         String reason = blocked
@@ -181,7 +182,10 @@ public class RoomBoardService {
         return new Limits(credit, p.midCreditMin(), credit < p.midCreditMin(),
                 p.maxContinuousMinutes(), p.manualReviewHeadcount(), p.autoApproveCredit(),
                 p.midCreditMin(), p.midMaxDurationMinutes(), p.autoApproveDailyLimit(),
-                reservationMapper.countAutoPassOnDate(userId, day), blocked, reason);
+                // "今日已用"按提交日算，与 RuleEngine 的口径保持一致
+                reservationMapper.countAutoPassOnDate(userId,
+                        today.atStartOfDay(), today.plusDays(1).atStartOfDay()),
+                blocked, reason);
     }
 
     // ====================================================================

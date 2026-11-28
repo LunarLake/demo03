@@ -82,6 +82,7 @@ public class ReservationServiceImpl extends ServiceImpl<ReservationMapper, Reser
     private final SlotSchema slotSchema;
     private final SlotProperties slotProperties;
     private final AuditLogMapper auditLogMapper;
+    private final com.wyc.demo03.mapper.UserMapper userMapper;
     private final Clock clock;
     private final DeviceNotifier deviceNotifier;
 
@@ -130,6 +131,10 @@ public class ReservationServiceImpl extends ServiceImpl<ReservationMapper, Reser
         int attendee = form.getAttendeeCount() == null ? 1 : form.getAttendeeCount();
         int capacity = room.getCapacity() == null ? 0 : room.getCapacity();
 
+        // 同一用户的并发提交串行化：每日上限是"读计数 → 判断 → 写入"三步，
+        // 两个标签页同时提交会各自读到旧计数，把上限突破。
+        userMapper.lockById(userId);
+
         RuleContext ctx = new RuleContext(
                 role,
                 true,
@@ -140,7 +145,9 @@ public class ReservationServiceImpl extends ServiceImpl<ReservationMapper, Reser
                 form.getPurpose(),
                 creditService.scoreOf(userId),
                 baseMapper.countActiveViolation(userId) > 0,
-                baseMapper.countAutoPassOnDate(userId, form.getStartTime().toLocalDate()),
+                // 按「提交日」统计，不是按预约发生日：后者会让"今天 3 笔"退化成"每个目标日期 3 笔"
+                baseMapper.countAutoPassOnDate(userId, now.toLocalDate().atStartOfDay(),
+                        now.toLocalDate().plusDays(1).atStartOfDay()),
                 units.size());
 
         RuleOutcome outcome = ruleEngine.evaluate(ctx);
@@ -161,6 +168,9 @@ public class ReservationServiceImpl extends ServiceImpl<ReservationMapper, Reser
             case FORCE_MANUAL -> {
                 r.setReservationStatus(ReservationStatus.PENDING.code());
                 r.setDecisionPath(DecisionPath.MANUAL_PENDING.name());
+                // 判定说明必须落库：审批人需要直接看到"为什么进了人工"，
+                // 而不是对着一串 E01_HEADCOUNT 去猜；申诉快照也依赖这段文案。
+                r.setDecisionReason(outcome.message());
                 save(r);
                 audit("STUDENT", AuditLog.Action.RESERVE, r.getId(),
                         "转人工：" + outcome.firstRuleCode());
@@ -169,6 +179,7 @@ public class ReservationServiceImpl extends ServiceImpl<ReservationMapper, Reser
             default -> {
                 r.setReservationStatus(ReservationStatus.APPROVED.code());
                 r.setDecisionPath(DecisionPath.AUTO_PASS.name());
+                r.setDecisionReason(outcome.message());
                 r.setApprovedAt(now);
                 save(r);
                 // 先落库拿到 ID，再占位；占用失败会抛异常把这条记录一起回滚

@@ -103,10 +103,19 @@ public interface ReservationMapper extends BaseMapper<Reservation> {
             + "WHERE reservation_status = 0 AND created_at < #{deadline}")
     int countPendingOverdue(@Param("deadline") LocalDateTime deadline);
 
-    /** 某用户某日已自动通过的笔数（附加规则"每日不超过 3 笔"用）。 */
+    /**
+     * 某用户「提交日」当天已自动通过的笔数（附加规则"每日不超过 3 笔"用）。
+     *
+     * <p>按 {@code created_at}（提交时刻）而不是 {@code start_time}（预约发生日）统计：
+     * 按后者会把"今天最多自动通过 3 笔"变成"每个目标日期 3 笔"，
+     * 用户给下周连约 3 笔后，下下周仍能再约 3 笔，上限形同虚设。
+     */
     @Select("SELECT COUNT(*) FROM t_reservation "
-            + "WHERE user_id = #{userId} AND decision_path = 'AUTO_PASS' AND DATE(start_time) = #{date}")
-    int countAutoPassOnDate(@Param("userId") Long userId, @Param("date") LocalDate date);
+            + "WHERE user_id = #{userId} AND decision_path = 'AUTO_PASS' "
+            + "  AND created_at >= #{dayStart} AND created_at < #{dayEnd}")
+    int countAutoPassOnDate(@Param("userId") Long userId,
+                            @Param("dayStart") LocalDateTime dayStart,
+                            @Param("dayEnd") LocalDateTime dayEnd);
 
     // ====================================================================
     // 定时任务扫描
