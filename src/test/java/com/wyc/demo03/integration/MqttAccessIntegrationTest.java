@@ -67,6 +67,18 @@ class MqttAccessIntegrationTest {
         student = userService.lambdaQuery().eq(User::getUsername, "student01").one();
         assertNotNull(student);
 
+        // 这个库同时是开发库，可能残留手工数据（例如此刻正在进行的一笔预约）。
+        // 测试只在自己的事务里"清场"：把 room 1 当前时段的其他有效预约挪出窗口。
+        // 事务结束会回滚，原数据不受影响 —— 既保证测试确定性，也不破坏别人的数据。
+        reservationMapper.update(null,
+                new com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper<Reservation>()
+                        .eq(Reservation::getRoomId, 1L)
+                        .in(Reservation::getReservationStatus,
+                                ReservationStatus.APPROVED.code(), ReservationStatus.CHECKED_IN.code())
+                        .le(Reservation::getStartTime, LocalDateTime.now())
+                        .gt(Reservation::getEndTime, LocalDateTime.now())
+                        .set(Reservation::getReservationStatus, ReservationStatus.CANCELED.code()));
+
         // BUG-012：只有 Broker 连着不算设备可达，必须有心跳把 online 置 1。
         // 真实场景里设备上电就会发心跳，这里显式补一次，让前置状态与现场一致。
         simulator.heartbeat();

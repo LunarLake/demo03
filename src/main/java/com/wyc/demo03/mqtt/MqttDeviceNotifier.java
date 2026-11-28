@@ -3,18 +3,15 @@ package com.wyc.demo03.mqtt;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.wyc.demo03.config.DoorProperties;
 import com.wyc.demo03.config.MqttProperties;
-import com.wyc.demo03.config.SlotProperties;
 import com.wyc.demo03.device.DeviceNotifier;
 import com.wyc.demo03.device.DispatchResult;
 import com.wyc.demo03.device.DoorController;
-import com.wyc.demo03.domain.ReservationStatus;
-import com.wyc.demo03.entity.CheckinCode;
+import com.wyc.demo03.device.ScreenPayloadBuilder;
 import com.wyc.demo03.entity.Device;
 import com.wyc.demo03.entity.DeviceCommand;
 import com.wyc.demo03.entity.Reservation;
 import com.wyc.demo03.mapper.DeviceMapper;
 import com.wyc.demo03.mapper.ReservationMapper;
-import com.wyc.demo03.service.CheckinCodeService;
 import com.wyc.demo03.service.DeviceCommandService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -22,7 +19,6 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
 
 import java.time.Clock;
-import java.time.Duration;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 
@@ -54,13 +50,12 @@ public class MqttDeviceNotifier implements DeviceNotifier {
 
     private final DeviceMapper deviceMapper;
     private final ReservationMapper reservationMapper;
-    private final CheckinCodeService checkinCodeService;
     private final DeviceCommandService deviceCommandService;
     private final DoorController doorController;
     private final MqttGateway gateway;
     private final MqttProperties mqttProperties;
     private final DoorProperties doorProperties;
-    private final SlotProperties slotProperties;
+    private final ScreenPayloadBuilder screenPayloadBuilder;
     private final ObjectMapper objectMapper;
     private final Clock clock;
 
@@ -79,7 +74,7 @@ public class MqttDeviceNotifier implements DeviceNotifier {
         }
         LocalDateTime now = LocalDateTime.now(clock);
         Reservation current = reservationMapper.findCurrentForRoom(roomId, now);
-        String payload = current == null ? "status=FREE" : buildPayload(current, now);
+        String payload = current == null ? "status=FREE" : screenPayloadBuilder.build(current, now);
 
         MqttEnvelope envelope = baseEnvelope("DISPLAY", device.getDeviceCode());
         envelope.setReservationId(current == null ? null : current.getId());
@@ -139,64 +134,6 @@ public class MqttDeviceNotifier implements DeviceNotifier {
             log.debug("房间 {} 未配置设备，跳过结束提醒", reservation.getRoomId());
         }
         return device;
-    }
-
-    /**
-     * 屏幕内容。
-     *
-     * <p><b>码只在当前有效的签到窗口内下发</b>：窗口是 {@code [开始, min(开始+窗口, 结束))}，
-     * 与后端签到校验同源（{@code app.slot.checkin-window-minutes}）。
-     * 提前上屏等于把凭证贴给任何路过的人，窗口过后继续显示同样没有意义（已签到后靠人脸/刷卡，
-     * 不再靠码）。
-     *
-     * <p>同时下发 {@code startsAt}/{@code endsAt}：设备要能自己算倒计时，
-     * 不能指望服务端每分钟替它重算 {@code remain}。
-     */
-    private String buildPayload(Reservation reservation, LocalDateTime now) {
-        ReservationStatus status = reservation.statusOrNull();
-        StringBuilder sb = new StringBuilder();
-        sb.append("reservation=").append(reservation.getId());
-        sb.append(";status=").append(status == null ? "UNKNOWN" : status.name());
-        if (reservation.getStartTime() != null) {
-            sb.append(";startsAt=").append(reservation.getStartTime().format(ISO));
-        }
-        if (reservation.getEndTime() != null) {
-            sb.append(";endsAt=").append(reservation.getEndTime().format(ISO));
-        }
-        sb.append(";remain=").append(remainText(reservation.getEndTime()));
-
-        if (status == ReservationStatus.APPROVED && inCheckinWindow(reservation, now)) {
-            CheckinCode code = checkinCodeService.findByReservationId(reservation.getId());
-            if (code != null && code.isActive()) {
-                sb.append(";code=").append(code.getCode());
-            }
-        }
-        return sb.toString();
-    }
-
-    /** 签到窗口 {@code [开始, min(开始+窗口, 结束))}：开始包含、截止不包含。 */
-    private boolean inCheckinWindow(Reservation r, LocalDateTime now) {
-        LocalDateTime start = r.getStartTime();
-        if (start == null || now.isBefore(start)) {
-            return false;
-        }
-        LocalDateTime end = start.plusMinutes(slotProperties.getCheckinWindowMinutes());
-        if (r.getEndTime() != null && end.isAfter(r.getEndTime())) {
-            end = r.getEndTime();
-        }
-        return now.isBefore(end);
-    }
-
-    /** 剩余时间 {@code mm:ss}；已结束则 00:00。 */
-    private String remainText(LocalDateTime end) {
-        if (end == null) {
-            return "00:00";
-        }
-        long seconds = Duration.between(LocalDateTime.now(clock), end).getSeconds();
-        if (seconds <= 0) {
-            return "00:00";
-        }
-        return String.format("%02d:%02d", seconds / 60, seconds % 60);
     }
 
     private MqttEnvelope baseEnvelope(String type, String deviceCode) {

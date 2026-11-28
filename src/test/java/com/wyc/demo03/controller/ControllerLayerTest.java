@@ -48,7 +48,6 @@ class ControllerLayerTest {
     @Mock
     private com.wyc.demo03.service.RuleConfigService ruleConfigService;
     private final com.wyc.demo03.config.SlotProperties slotProps = new com.wyc.demo03.config.SlotProperties();
-    private final com.wyc.demo03.config.DoorProperties doorProps = new com.wyc.demo03.config.DoorProperties();
     @Mock
     private AttendanceRecordService attendanceRecordService;
     @Mock
@@ -65,7 +64,7 @@ class ControllerLayerTest {
                 .thenReturn(com.wyc.demo03.domain.RuleParams.defaults());
         mainController = new MainController(userService, meetingRoomService,
                 attendanceRecordService, reservationService, loginAttemptService);
-        ReservationController reservationController = new ReservationController(reservationService, meetingRoomService, accessService, roomBoardService, ruleConfigService, slotProps, doorProps);
+        ReservationController reservationController = new ReservationController(reservationService, meetingRoomService, accessService, roomBoardService, ruleConfigService, slotProps);
         RoomController roomController = new RoomController(meetingRoomService, reservationService);
         com.wyc.demo03.service.LogService logService = org.mockito.Mockito.mock(com.wyc.demo03.service.LogService.class);
         org.mockito.Mockito.lenient().when(logService.list()).thenReturn(java.util.List.of());
@@ -260,7 +259,7 @@ class ControllerLayerTest {
     }
 
     @Test
-    @DisplayName("自动通过后跳到「我的预约」并带出签到码")
+    @DisplayName("自动通过后跳到「我的预约」，且提示里不得出现签到码")
     void applyAutoApprovedRedirectsToMyReservations() throws Exception {
         MockHttpSession session = new MockHttpSession();
         session.setAttribute("Id", 1L);
@@ -278,7 +277,11 @@ class ControllerLayerTest {
                         .param("_csrf", "token"))
                 .andExpect(status().is3xxRedirection())
                 .andExpect(redirectedUrl("/my-reservations"))
-                .andExpect(flash().attribute("infoType", "success"));
+                .andExpect(flash().attribute("infoType", "success"))
+                // 签到码是到场凭证，任何网页响应里都不能出现
+                .andExpect(flash().attribute("info",
+                        org.hamcrest.Matchers.not(
+                                org.hamcrest.Matchers.containsString("1234"))));
     }
 
     @Test
@@ -453,7 +456,7 @@ class ControllerLayerTest {
 
         mockMvc = MockMvcBuilders.standaloneSetup(
                         new MainController(userService, meetingRoomService, attendanceRecordService, reservationService, loginAttemptService),
-                        new ReservationController(reservationService, meetingRoomService, accessService, roomBoardService, ruleConfigService, slotProps, doorProps),
+                        new ReservationController(reservationService, meetingRoomService, accessService, roomBoardService, ruleConfigService, slotProps),
                         new RoomController(meetingRoomService, reservationService),
                         new LogController(logService, reservationService, attendanceRecordService))
                 .setViewResolvers(new InternalResourceViewResolver("/WEB-INF/views/", ".html"))

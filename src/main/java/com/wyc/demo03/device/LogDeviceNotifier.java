@@ -16,8 +16,12 @@ import java.time.LocalDateTime;
  * <p>{@code app.door.mode=log}（默认）时生效。它与 {@link LogDoorController} 配对，
  * 让整条业务链路在没有 Broker 的情况下也能完整跑通，同时不假装真的控制了设备。
  *
- * <p>与 MQTT 版一样按房间当前时刻重算（BUG-002），否则这条"假链路"反而会掩盖
- * 真机才会暴露的屏幕绑定问题 —— 模拟实现与真机口径不同，等于没模拟。
+ * <p>与 MQTT 版一样按房间当前时刻重算（BUG-002），并且**共用同一份
+ * {@link ScreenPayloadBuilder}**：模拟屏打印的内容与真机屏幕逐字一致，
+ * 包括签到码只在签到窗口内出现这一点。
+ *
+ * <p>因此无设备时签到码只出现在<b>服务端日志</b>里（运维/演示者可见），
+ * 不会出现在任何网页上 —— 网页能看到码，"到场才能签到"就失效了。
  */
 @Slf4j
 @Component
@@ -26,6 +30,7 @@ import java.time.LocalDateTime;
 public class LogDeviceNotifier implements DeviceNotifier {
 
     private final ReservationMapper reservationMapper;
+    private final ScreenPayloadBuilder screenPayloadBuilder;
     private final Clock clock;
 
     @Override
@@ -39,9 +44,7 @@ public class LogDeviceNotifier implements DeviceNotifier {
             log.info("[模拟屏幕] room={} 空闲", roomId);
             return;
         }
-        var status = current.statusOrNull();
-        log.info("[模拟屏幕] room={} reservation={} status={}",
-                roomId, current.getId(), status == null ? "-" : status.label());
+        log.info("[模拟屏幕] room={} {}", roomId, screenPayloadBuilder.build(current, now));
     }
 
     @Override

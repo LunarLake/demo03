@@ -1,7 +1,6 @@
 package com.wyc.demo03.controller;
 
 import com.wyc.demo03.common.ApiResponse;
-import com.wyc.demo03.config.DoorProperties;
 import com.wyc.demo03.config.SlotProperties;
 import com.wyc.demo03.common.SlotConflictException;
 import com.wyc.demo03.entity.MeetingRoom;
@@ -45,36 +44,29 @@ public class ReservationController {
     private final RoomBoardService roomBoardService;
     private final RuleConfigService ruleConfigService;
     private final SlotProperties slotProperties;
-    private final DoorProperties doorProperties;
 
     public ReservationController(ReservationService reservationService,
                                  MeetingRoomService meetingRoomService,
                                  AccessService accessService,
                                  RoomBoardService roomBoardService,
                                  RuleConfigService ruleConfigService,
-                                 SlotProperties slotProperties,
-                                 DoorProperties doorProperties) {
+                                 SlotProperties slotProperties) {
         this.reservationService = reservationService;
         this.meetingRoomService = meetingRoomService;
         this.accessService = accessService;
         this.roomBoardService = roomBoardService;
         this.ruleConfigService = ruleConfigService;
         this.slotProperties = slotProperties;
-        this.doorProperties = doorProperties;
     }
 
     /**
-     * 签到码是否允许在网页上直接看到。
+     * 把签到策略告诉页面。
      *
-     * <p>只有"没有真实屏幕"（{@code app.door.mode=log}）时才允许 —— 否则学生能在宿舍看到码，
-     * "现场看屏输码"这个到场依据就失效了。接了真设备就必须只在屏幕上显示。
+     * <p>只下发窗口长度。<b>签到码本身从不下发</b> —— 它是「人到现场」的凭证，
+     * 一旦能在网页上看到，学生坐在宿舍就能签到，整条门禁逻辑就失去意义。
+     * 码的展示位置只有两处：门禁 OLED 屏，以及无设备（{@code mode=log}）时的服务端日志。
      */
-    private boolean codeVisibleOnWeb() {
-        return "log".equalsIgnoreCase(doorProperties.getMode());
-    }
-
     private void exposeCheckinPolicy(Model model) {
-        model.addAttribute("codeVisibleOnWeb", codeVisibleOnWeb());
         model.addAttribute("checkinWindowMinutes", slotProperties.getCheckinWindowMinutes());
     }
 
@@ -138,7 +130,7 @@ public class ReservationController {
         Map<String, Object> data = new java.util.HashMap<>();
         data.put("reservationId", result.reservationId());
         data.put("status", result.status() == null ? null : result.status().name());
-        data.put("checkInCode", result.checkInCode());
+        // 刻意不返回签到码：它会进入浏览器 DevTools，等于把到场凭证放到网上
         data.put("message", result.message());
         return ApiResponse.ok(data);
     }
@@ -179,10 +171,10 @@ public class ReservationController {
 
         ra.addFlashAttribute("infoType", "success");
         if (result.approvedImmediately()) {
-            String info = result.checkInCode() == null
-                    ? "预约已生效"
-                    : "预约已生效，签到码 " + result.checkInCode() + "，请在开始后 5 分钟内到现场屏幕输入";
-            ra.addFlashAttribute("info", info);
+            // 签到码是「到场凭证」，任何网页都不展示，只在门禁屏幕（或 log 模式的服务端日志）出现
+            ra.addFlashAttribute("info",
+                    "预约已生效。签到码已下发至门禁屏幕，请在开始后 "
+                            + slotProperties.getCheckinWindowMinutes() + " 分钟内在现场查看并签到。");
         } else {
             ra.addFlashAttribute("info", "申请已提交（" + result.message() + "），等待管理员审核");
         }
@@ -227,7 +219,7 @@ public class ReservationController {
             if (!result.ok()) {
                 return fail(ra, result.message(), "/reservation/approve-list");
             }
-            ra.addFlashAttribute("info", "审批通过，申请人签到码：" + result.checkInCode());
+            ra.addFlashAttribute("info", "审批通过。签到码已签发，将在签到时段显示在门禁屏幕上。");
             ra.addFlashAttribute("infoType", "success");
         } catch (SlotConflictException e) {
             // 状态变更已随事务一起回滚，申请仍是待审批

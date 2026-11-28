@@ -114,12 +114,14 @@ class WebPagesSmokeTest {
                 .andExpect(status().isOk())
                 .andExpect(content().string(org.hamcrest.Matchers.containsString(
                         "/reservation/check-in/" + created.reservationId())))
-                .andExpect(content().string(org.hamcrest.Matchers.containsString(
-                        String.valueOf(created.checkInCode()))));
+                // 签到码是「到场凭证」，网页不得展示（只在门禁屏幕或无设备时的服务端日志出现）
+                .andExpect(content().string(org.hamcrest.Matchers.not(
+                        org.hamcrest.Matchers.containsString(
+                                String.valueOf(created.checkInCode())))));
     }
 
     @Test
-    @DisplayName("排期板接口：2 个房间 × 56 格，状态字段可直接被前端消费")
+    @DisplayName("排期板接口：每个房间 56 格，状态字段可直接被前端消费")
     void boardApiReturnsFullGrid() throws Exception {
         String tomorrow = java.time.LocalDate.now().plusDays(1).toString();
 
@@ -128,7 +130,9 @@ class WebPagesSmokeTest {
                 .andExpect(jsonPath("$.success").value(true))
                 .andExpect(jsonPath("$.data.slotsPerDay").value(56))
                 .andExpect(jsonPath("$.data.unitMinutes").value(15))
-                .andExpect(jsonPath("$.data.rooms.length()").value(2))
+                // 不写死房间数：这个库同时是开发库，可能被手工加过房间
+                .andExpect(jsonPath("$.data.rooms.length()")
+                        .value(org.hamcrest.Matchers.greaterThanOrEqualTo(2)))
                 .andExpect(jsonPath("$.data.rooms[0].slots.length()").value(56))
                 .andExpect(jsonPath("$.data.rooms[0].slots[0].state").isString())
                 .andExpect(jsonPath("$.data.rooms[0].slots[0].actionable").isBoolean());

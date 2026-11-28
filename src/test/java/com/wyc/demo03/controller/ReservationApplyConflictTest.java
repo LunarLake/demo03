@@ -1,7 +1,6 @@
 package com.wyc.demo03.controller;
 
 import com.wyc.demo03.common.SlotConflictException;
-import com.wyc.demo03.config.DoorProperties;
 import com.wyc.demo03.config.SlotProperties;
 import com.wyc.demo03.domain.RuleParams;
 import com.wyc.demo03.entity.Reservation;
@@ -54,8 +53,7 @@ class ReservationApplyConflictTest {
                 mock(AccessService.class),
                 board,
                 ruleConfigService,
-                new SlotProperties(),
-                new DoorProperties());
+                new SlotProperties());
 
         mvc = MockMvcBuilders.standaloneSetup(controller)
                 .setViewResolvers(new InternalResourceViewResolver("/WEB-INF/views/", ".html"))

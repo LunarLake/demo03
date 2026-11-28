@@ -133,16 +133,7 @@
                       th:text="'原因：' + ${r['decision_reason']}"
                     ></div>
                   </td>
-                  <td>
-                    <span th:if="${codeVisibleOnWeb and r['checkInCode'] != null}" th:text="${r['checkInCode']}"></span>
-                    <span th:if="${!codeVisibleOnWeb}" class="text-muted small">请见现场屏幕</span>
-                    <span th:if="${codeVisibleOnWeb and r['checkInCode'] == null}">—</span>
-                    <div
-                      th:if="${r['checkInCode'] != null and r['codeRevokedAt'] != null}"
-                      class="small text-muted"
-                      >已失效</div
-                    >
-                  </td>
+                  <td class="text-muted small text-nowrap">门禁屏幕</td>
                   <td>
                     <span
                       th:if="${r['attend_status'] != null and r['attend_status'] == 1}"

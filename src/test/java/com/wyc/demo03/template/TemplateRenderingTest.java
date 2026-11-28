@@ -117,6 +117,29 @@ class TemplateRenderingTest {
     }
 
     @Test
+    @DisplayName("我的预约：签到码不得出现在网页，只提示去门禁屏幕")
+    void myReservationsNeverRendersCheckInCode() {
+        Page<Map<String, Object>> page = new Page<>(1, 10);
+        Map<String, Object> row = new HashMap<>();
+        row.put("id", 1L);
+        row.put("roomName", "研讨室A");
+        row.put("attendee_count", 2);
+        row.put("start_time", LocalDateTime.of(2026, 11, 28, 14, 0));
+        row.put("end_time", LocalDateTime.of(2026, 11, 28, 15, 0));
+        row.put("reservation_status", 1);
+        row.put("checkInCode", "1234");
+        row.put("attend_status", 0);
+        page.setRecords(List.of(row));
+
+        String html = engine().process("my-reservations", context("STUDENT",
+                model("reservationPage", page)));
+
+        assertFalse(html.contains("1234"),
+                "签到码是「到场凭证」，一旦能在网页看到，学生坐在宿舍就能签到");
+        assertTrue(html.contains("门禁屏幕"), "必须告诉用户去哪里看码");
+    }
+
+    @Test
     @DisplayName("排期板渲染：图例、网格容器、底部操作栏都在")
     void boardRendersShellAndLegend() {
         String html = engine().process("board", context("STUDENT",
